@@ -16,15 +16,45 @@ services:
       timeout: 3s
       retries: 10
 
+  # backend and frontend make `docker compose up` run the whole app (launcher/ wraps it for
+  # double-click use). setup.sh starts only `db` and runs the dev servers on the host instead.
   backend:
     build: ./backend
+    restart: unless-stopped
     environment:
       DATABASE_URL: postgresql+asyncpg://steam:steam@db:5432/steam_reviews
+      # Local use: any Steam game is fetched and analyzed on request (render.yaml turns this off).
+      ALLOW_ON_DEMAND_PROCESSING: "true"
     ports:
       - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Baked into the build (Next rewrites /api/* to this); resolves on the compose network.
+        API_URL: http://backend:8000
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
 
 volumes:
   pgdata:
