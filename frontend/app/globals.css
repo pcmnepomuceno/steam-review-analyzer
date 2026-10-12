@@ -225,7 +225,7 @@ p {
 }
 
 main {
-  max-width: 1040px;
+  max-width: calc(1040px + 2 * 16px); /* content column = the header's 1040px, logo aligned */
   margin: 0 auto;
   padding: 32px calc(16px + env(safe-area-inset-right, 0px))
     calc(64px + env(safe-area-inset-bottom, 0px)) calc(16px + env(safe-area-inset-left, 0px));
@@ -286,10 +286,10 @@ main section,
   --row-bg: var(--surface);
   position: relative;
   display: grid;
-  grid-template-columns: 152px minmax(0, 1fr) auto;
+  grid-template-columns: 136px minmax(0, 1fr) auto;
   gap: 20px;
   align-items: center;
-  padding: 12px 16px 12px 12px;
+  padding: 10px 16px 10px 10px;
   background: var(--row-bg);
   border-radius: 4px;
   box-shadow: var(--shadow);
@@ -406,7 +406,7 @@ main section,
 }
 
 .skeleton {
-  min-height: 104px;
+  min-height: 88px;
   background: var(--surface);
   border-radius: 4px;
   opacity: 0.6;
@@ -584,6 +584,12 @@ button:disabled {
   white-space: nowrap;
 }
 
+.tag.active {
+  background: color-mix(in srgb, var(--link) 22%, var(--field));
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
 .tag.dim {
   color: var(--text-2);
 }
@@ -750,14 +756,42 @@ h1[tabindex="-1"]:focus {
 }
 
 .figures {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 40px;
+  display: grid;
+  gap: 18px;
+  max-width: 760px;
 }
 
+/* Number left, label over a bar right. Both bars share one 0-100% scale. */
 .figure {
   display: grid;
-  gap: 4px;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 20px;
+  row-gap: 8px;
+  align-items: center;
+}
+
+.figure .num {
+  grid-row: 1 / 3;
+}
+
+.figure .meter {
+  display: block;
+  height: 12px;
+  border-radius: 2px;
+  background: var(--field);
+  overflow: hidden;
+}
+
+.figure .meter span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--positive);
+}
+
+.figure.weak .meter span {
+  background: var(--negative);
 }
 
 /* Sentence-length labels: small caps would shout them. */
@@ -768,18 +802,19 @@ h1[tabindex="-1"]:focus {
 }
 
 .figure .num {
-  font-size: 2rem;
+  font-size: 3rem;
   line-height: 1;
   font-weight: 500;
   color: var(--text-strong);
 }
 
-.figure .num.weak {
+.figure.weak .num {
   color: var(--negative-text);
 }
 
 .support {
   max-width: 70ch;
+  font-size: 0.9375rem;
 }
 
 .about {
@@ -947,6 +982,14 @@ h1[tabindex="-1"]:focus {
   max-width: 72ch;
 }
 
+/* Whole phrase on one line, with a 44px hit area that doesn't space the paragraph out. */
+.callout a,
+.about li a {
+  display: inline-block;
+  padding-block: 12px;
+  margin-block: -12px;
+}
+
 #reviews {
   scroll-margin-top: 16px;
 }
@@ -959,7 +1002,7 @@ details {
 summary {
   cursor: pointer;
   color: var(--link);
-  min-height: 32px;
+  min-height: 44px;
   width: fit-content;
   display: inline-flex;
   align-items: center;
@@ -1041,22 +1084,29 @@ label select {
 }
 
 .reviews li {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  gap: 8px 28px;
   background: var(--surface-2);
   border-radius: 3px;
   padding: 14px 16px;
 }
 
+/* The rail: the two verdicts, the disagreement flag, then the facts. */
 .review-meta {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px 14px;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
   font-size: 0.8125rem;
   color: var(--text-2);
 }
 
+.review-body {
+  min-width: 0;
+}
+
 .review-topics {
-  margin-top: 8px;
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
@@ -1068,7 +1118,7 @@ label select {
   overflow-wrap: anywhere;
   /* em, not ch: Figtree's text averages well under the width of its "0", so 65ch ran to
      about 95 characters a line. 34em is about 75. */
-  max-width: 34em;
+  max-width: 36em;
   display: -webkit-box;
   -webkit-line-clamp: 6;
   -webkit-box-orient: vertical;
@@ -1081,12 +1131,17 @@ label select {
 
 /* The sentences a review's topic tags were matched on. */
 mark {
-  background: color-mix(in srgb, var(--link) 16%, transparent);
+  background: color-mix(in srgb, var(--link) 12%, transparent);
   color: var(--text-strong);
   border-radius: 2px;
   padding: 0.15em 2px; /* inline: the vertical padding paints, it doesn't move lines */
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
+}
+
+/* The sentence matched on the topic the list is filtered to. */
+mark.on {
+  background: color-mix(in srgb, var(--link) 30%, transparent);
 }
 
 button.link {
@@ -1120,13 +1175,14 @@ button.link {
   color: var(--text);
 }
 
+/* Its own pill: where the model and the reviewer part is this list's main finding. */
 .disagree {
-  padding: 1px 6px;
-  border: 1px solid currentColor;
+  padding: 2px 8px;
   border-radius: 2px;
+  background: color-mix(in srgb, var(--mixed-text) 18%, transparent);
   color: var(--mixed-text);
   font-size: 0.75rem;
-  font-weight: 500;
+  font-weight: 600;
   line-height: 1.4;
 }
 
@@ -1156,11 +1212,20 @@ button.link {
 /* ---- Narrower screens ---- */
 
 @media (max-width: 900px) {
+  .reviews li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .review-meta {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 14px;
+  }
   .games-head {
     display: none;
   }
   .game-row {
-    grid-template-columns: 152px minmax(0, 1fr);
+    grid-template-columns: 136px minmax(0, 1fr);
     align-items: start;
   }
   .game-row .strip {
@@ -1192,8 +1257,12 @@ button.link {
   .verdict {
     font-size: 1.25rem;
   }
+  .figure {
+    grid-template-columns: 4.75rem minmax(0, 1fr);
+    column-gap: 14px;
+  }
   .figure .num {
-    font-size: 1.75rem;
+    font-size: 2.25rem;
   }
   .topic {
     grid-template-columns: 1fr;
@@ -1213,8 +1282,15 @@ button.link {
     font-size: 0.6875rem;
     letter-spacing: -0.01em;
   }
-  summary {
-    min-height: 44px;
+  .filters {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .filters label:first-child {
+    grid-column: 1 / -1;
+  }
+  .filters select {
+    width: 100%;
   }
   .panel {
     padding: 16px;

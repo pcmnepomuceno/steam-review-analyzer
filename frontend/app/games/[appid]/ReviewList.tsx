@@ -166,7 +166,7 @@ export default function ReviewList({ appid, aspects }: { appid: number; aspects:
         <>
           <ul className={`reviews${loading ? " stale" : ""}`} aria-busy={loading}>
             {page.items.map((r) => (
-              <ReviewItem key={r.id} review={r} />
+              <ReviewItem key={r.id} review={r} topic={aspect} />
             ))}
           </ul>
           {(info.hasPrev || info.hasNext) && (
@@ -196,51 +196,56 @@ export default function ReviewList({ appid, aspects }: { appid: number; aspects:
   );
 }
 
-function ReviewItem({ review: r }: { review: Review }) {
+function ReviewItem({ review: r, topic }: { review: Review; topic: string }) {
   const predicted = r.predicted_sentiment;
   // The model reads the words, Steam records the thumb; where they part is worth showing.
   const disagree = predicted !== null && (predicted === "positive") !== r.voted_up;
   const facts = `${formatDate(r.created_at)} · ${playtime(r.playtime_forever)}`;
   return (
     <li>
+      {/* A rail beside the text on wide screens: the verdicts first, the facts under them. */}
       <div className="review-meta">
         <span className={`vote ${r.voted_up ? "up" : "down"}`}>
           <Thumb up={r.voted_up} />
           {r.voted_up ? "Recommended" : "Not recommended"}
         </span>
-        {predicted && (
-          <span className={`badge ${predicted}`}>
-            Model: {predicted}
-            {disagree && (
-              <span className="disagree">
-                <span className="sr-only">, </span>disagrees
-                <span className="sr-only"> with the reviewer</span>
-              </span>
-            )}
-          </span>
-        )}
-        <span>
+        {predicted && <span className={`badge ${predicted}`}>Model: {predicted}</span>}
+        {disagree && <span className="disagree">Model disagrees with the reviewer</span>}
+        <span className="facts">
           {facts}
           {r.votes_up > 0 && ` · ${r.votes_up.toLocaleString("en-US")} found it helpful`}
         </span>
       </div>
-      {r.aspects.length > 0 && (
-        <p className="review-topics">
-          <span className="sr-only">Topics: </span>
-          {r.aspects.map((a) => (
-            <span key={a} className="tag">
-              {copyFor(a).label}
-            </span>
-          ))}
-        </p>
-      )}
-      <ReviewText review={r} context={facts} />
+      <div className="review-body">
+        {r.aspects.length > 0 && (
+          <p className="review-topics">
+            <span className="sr-only">Topics: </span>
+            {/* The filtered topic first and stronger, so the card says why it is listed. */}
+            {[...r.aspects]
+              .sort((a, b) => Number(b === topic) - Number(a === topic))
+              .map((a) => (
+                <span key={a} className={`tag${a === topic ? " active" : ""}`}>
+                  {copyFor(a).label}
+                </span>
+              ))}
+          </p>
+        )}
+        <ReviewText review={r} context={facts} topic={topic} />
+      </div>
     </li>
   );
 }
 
 /** A review clamped to 6 lines by CSS, with a toggle only when the clamp hides something. */
-function ReviewText({ review, context }: { review: Review; context: string }) {
+function ReviewText({
+  review,
+  context,
+  topic,
+}: {
+  review: Review;
+  context: string;
+  topic: string;
+}) {
   const ref = useRef<HTMLParagraphElement>(null);
   const [open, setOpen] = useState(false);
   const [clamped, setClamped] = useState(false);
@@ -263,7 +268,7 @@ function ReviewText({ review, context }: { review: Review; context: string }) {
         {/* The sentences the topic tags came from, so a tag can be checked against its source. */}
         {highlight(review.review_text, review.matches ?? []).map((s, i) =>
           s.aspect ? (
-            <mark key={i} title={copyFor(s.aspect).label}>
+            <mark key={i} className={s.aspect === topic ? "on" : undefined} title={copyFor(s.aspect).label}>
               {s.text}
             </mark>
           ) : (

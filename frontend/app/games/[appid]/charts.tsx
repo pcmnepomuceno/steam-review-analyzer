@@ -63,10 +63,10 @@ export function TrendChart({ trend, spike }: { trend: AspectSummary["trend"]; sp
             {spike && (
               <ReferenceLine
                 x={spike}
-                stroke="var(--text-2)"
+                stroke="var(--negative-text)"
                 strokeDasharray="3 3"
                 ifOverflow="extendDomain"
-                label={{ value: "Spike", position: "insideTopRight", fill: "var(--text-2)", fontSize: 12 }}
+                label={{ value: "Spike", position: "insideTopRight", fill: "var(--negative-text)", fontSize: 13 }}
               />
             )}
             {/* A 1px surface-colored stroke on each segment makes a 2px gap between them. */}

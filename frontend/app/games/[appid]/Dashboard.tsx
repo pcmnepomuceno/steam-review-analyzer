@@ -269,18 +269,26 @@ function Headline({ data, rating }: { data: AspectSummary; rating: SteamRating |
         {result?.text ?? summary}
       </h2>
       {result && (
+        // Two bars on one 0-100% scale, so the gap between the thumbs and the topic is seen,
+        // not only read. The numbers are text; the bars repeat them and are hidden from AT.
         <div className="figures">
           <div className="figure">
             <span className="num">{result.steamPct}%</span>
             <span className="label">Recommend it on Steam</span>
+            <span className="meter" aria-hidden>
+              <span style={{ width: `${result.steamPct}%` }} />
+            </span>
           </div>
-          <div className="figure">
-            <span className={`num${result.weaker ? " weak" : ""}`}>{result.aspectPct}%</span>
+          <div className={`figure${result.weaker ? " weak" : ""}`}>
+            <span className="num">{result.aspectPct}%</span>
             <span className="label">{copyFor(result.aspect).label} reviews read as positive</span>
+            <span className="meter" aria-hidden>
+              <span style={{ width: `${result.aspectPct}%` }} />
+            </span>
           </div>
         </div>
       )}
-      {support && <p className="support">{support}</p>}
+      {support && <p className="support muted">{support}</p>}
       <details className="about">
         <summary>About these numbers</summary>
         <ul>
@@ -380,20 +388,24 @@ function TopicRow({
           </p>
         )}
         {a.total > 0 && (
+          // One link per topic: the negative reviews when there are some (the topic's other
+          // reviews are one Topic filter away in the list), else all of them.
           <p className="counts">
-            <Link href={`/games/${appid}?aspect=${a.aspect}#reviews`}>
-              {judged ? reviews(a.total) : "Read them"}
-              {about}
-            </Link>
-            {judged && a.negative > 0 && (
+            {judged && a.negative > 0 ? (
               <>
+                {reviews(a.total)}
                 {" · "}
                 <Link href={`/games/${appid}?aspect=${a.aspect}&sentiment=negative#reviews`}>
-                  {a.negative.toLocaleString("en-US")} negative
+                  Read {a.negative.toLocaleString("en-US")} negative
                   <span className="sr-only"> reviews</span>
                   {about}
                 </Link>
               </>
+            ) : (
+              <Link href={`/games/${appid}?aspect=${a.aspect}#reviews`}>
+                {judged ? `Read ${reviews(a.total)}` : "Read them"}
+                {about}
+              </Link>
             )}
           </p>
         )}
