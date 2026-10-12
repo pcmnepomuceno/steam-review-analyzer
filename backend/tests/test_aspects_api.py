@@ -606,6 +606,10 @@ async def test_aspect_quotes_prefer_the_weak_side(client, engine, seeded, ml_cal
     quotes = {a["aspect"]: a["quotes"] for a in body["aspects"]}
     async with engine.connect() as conn:
         assert await conn.scalar(select(Game.aspect_quotes)) == quotes
+        card = await conn.scalar(select(Game.card_counts))
+    # The homepage card's counts are /aspects' own, stored by the same run.
+    assert card["aspects"] == [{k: v for k, v in a.items() if k != "quotes"} for a in body["aspects"]]
+    assert card["steam_sample"] == body["steam_sample"]
     # Units under QUOTE_MIN_CHARS ("It crashes a lot", "Price is great") never qualify.
     # The thumb is the reviewer's own (add_review's are all up), not the model's reading.
     assert quotes["bugs"] == [{

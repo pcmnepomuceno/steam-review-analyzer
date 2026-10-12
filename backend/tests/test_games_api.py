@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 
 import httpx
 import pytest
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
@@ -12,6 +13,7 @@ from src.games import service
 from src.games.constants import AspectStatus
 from src.games.models import Game
 from src.reviews import constants
+from src.reviews import service as reviews_service
 from src.reviews.models import Review, ReviewAspect
 
 DONE_AT = datetime(2026, 10, 1, 12, tzinfo=UTC)
@@ -52,6 +54,12 @@ async def test_lists_only_done_games_with_counts(client, engine):
         await session.flush()
         session.add(ReviewAspect(review_id=2, sentence_text="it crashes", aspect_label="bugs",
                                  similarity_score=0.5))
+        await session.commit()
+    # What the run that processed the game stores (`process_reviews`); the list only reads it.
+    async with AsyncSession(engine) as session:
+        summary = await reviews_service._summary_counts(session, 1)
+        await session.execute(update(Game).where(Game.appid == 1).values(
+            card_counts={"aspects": summary["aspects"], "steam_sample": summary["steam_sample"]}))
         await session.commit()
 
     resp = await client.get("/games")

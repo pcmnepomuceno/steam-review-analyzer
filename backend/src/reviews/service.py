@@ -246,7 +246,8 @@ async def _process_owned(session: AsyncSession, appid: int, force: bool) -> int 
         for i in range(0, len(units), constants.INSERT_CHUNK_SIZE):
             chunk = units[i : i + constants.INSERT_CHUNK_SIZE]
             await session.execute(insert(ReviewAspect).values(chunk))
-        quotes = await _select_quotes(session, appid)  # reads the rows written above
+        summary = await _summary_counts(session, appid)  # reads the rows written above
+        quotes = await _select_quotes(session, appid, summary)
         now = datetime.now(UTC)
         await session.execute(
             update(Game)
@@ -255,6 +256,7 @@ async def _process_owned(session: AsyncSession, appid: int, force: bool) -> int 
                 aspects_status=AspectStatus.DONE,
                 aspects_processed_at=now,
                 aspect_quotes=quotes,
+                card_counts={"aspects": summary["aspects"], "steam_sample": summary["steam_sample"]},
                 steam_rating_checked_at=now,
                 **rating,
             )
@@ -439,14 +441,15 @@ async def aspect_summary(session: AsyncSession, game: Game) -> dict[str, Any]:
     return {"appid": game.appid, "status": "ready", **summary}
 
 
-async def _select_quotes(session: AsyncSession, appid: int) -> dict[str, list[dict[str, Any]]]:
+async def _select_quotes(
+    session: AsyncSession, appid: int, summary: dict[str, Any]
+) -> dict[str, list[dict[str, Any]]]:
     """Each aspect's example sentences (`_pick_quotes`), from the app's stored results.
 
     Run once by `process_reviews` inside its final write transaction, so it sees that run's
     rows; the result is stored in `games.aspect_quotes`. A weak aspect (under 50% positive,
     or well below the game's overall share) leans negative, any other positive.
     """
-    summary = await _summary_counts(session, appid)
     candidates = await _quote_candidates(session, appid)
     overall_pct = summary["overall"]["positive_pct"] or 0
     quotes = {}

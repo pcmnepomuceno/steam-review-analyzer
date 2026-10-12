@@ -42,3 +42,7 @@ class Game(Base):
     steam_positive: Mapped[int | None] = mapped_column(Integer)
     steam_total: Mapped[int | None] = mapped_column(Integer)
     steam_rating_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The homepage card's inputs, stored by the run that sets "done" so `GET /games` doesn't
+    # re-aggregate review_aspects per visit: {"aspects": [AspectCounts...], "steam_sample":
+    # SentimentCounts}, the same counts /aspects gives. NULL only on a game not yet processed.
+    card_counts: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
