@@ -26,6 +26,14 @@ QUOTE_MAX_CHARS = 220
 QUOTE_WEAK_MARGIN_PCT = 5.0
 
 
+class ReviewSort(StrEnum):
+    """Orders for GET /games/{appid}/reviews; ties fall back to newest first."""
+
+    NEWEST = "newest"
+    HELPFUL = "helpful"  # Steam's votes_up: other players marked it helpful
+    PLAYTIME = "playtime"  # longest playtime_forever first
+
+
 class Skipped(StrEnum):
     """Why `service.process_reviews` did nothing for an app."""
 

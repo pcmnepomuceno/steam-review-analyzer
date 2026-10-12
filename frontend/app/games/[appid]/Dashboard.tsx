@@ -11,10 +11,23 @@ import {
   type Loaded,
   type SteamRating,
 } from "../../../lib/api";
-import { comparison, copyFor, MIN_MENTIONS, pct, storePct, verdict } from "../../../lib/insights";
+import {
+  comparison,
+  type Comparison,
+  copyFor,
+  formatDate,
+  MIN_MENTIONS,
+  pct,
+  quoteText,
+  spike,
+  storePct,
+  strength,
+  verdict,
+} from "../../../lib/insights";
 import AppidForm from "../../AppidForm";
-import { AspectChart, TrendChart } from "./charts";
+import { TrendChart } from "./charts";
 import ReviewList from "./ReviewList";
+import Thumb from "./Thumb";
 
 type State = Loaded<AspectSummary> | { kind: "loading" };
 
@@ -34,6 +47,15 @@ export default function Dashboard({ appid }: { appid: number }) {
     return () => controller.abort();
   }, [appid, attempt]);
 
+  // A final screen replaced the waiting one: start keyboard and screen reader users at its
+  // heading, unless they already moved focus somewhere themselves.
+  useEffect(() => {
+    if (state.kind === "loading" || state.kind === "processing") return;
+    const active = document.activeElement;
+    if (active && active !== document.body) return;
+    document.querySelector<HTMLElement>("main h1")?.focus({ preventScroll: true });
+  }, [state.kind]);
+
   const retry = () => {
     setState({ kind: "loading" });
     setAttempt((n) => n + 1);
@@ -43,7 +65,10 @@ export default function Dashboard({ appid }: { appid: number }) {
     case "loading":
       return (
         <Status title="Loading…" spinner>
-          A game seen for the first time is fetched from Steam first, which takes 10–20 seconds.
+          {/* Shown only if the answer is slow, so a cached game doesn't flash it. */}
+          <span className="later">
+            A game seen for the first time is fetched from Steam first, which takes 10–20 seconds.
+          </span>
         </Status>
       );
     case "processing":
@@ -55,10 +80,10 @@ export default function Dashboard({ appid }: { appid: number }) {
       );
     case "timeout":
       return (
-        <Status title="Still analyzing" error>
+        <Status title="Still analyzing">
           <p>This is taking longer than expected; the analysis may have stalled.</p>
           <p>
-            <button onClick={retry}>Check again</button>
+            <button onClick={retry}>Check again</button> or <Link href="/">pick another game</Link>
           </p>
         </Status>
       );
@@ -68,6 +93,9 @@ export default function Dashboard({ appid }: { appid: number }) {
           {/* No retry button: a failed game stays failed until the owner reruns it with
               --force, which no visitor can do. */}
           <p>{state.message}</p>
+          <p>
+            <Link href="/">Pick another game</Link>
+          </p>
         </Status>
       );
     case "not_found":
@@ -125,10 +153,16 @@ function Status({
   error?: boolean;
   children: React.ReactNode;
 }) {
+  // A waiting screen is all text, so the whole of it is a live region. A final screen
+  // announces only its title, not the search form or buttons below it, and also takes focus
+  // when nothing else has it (see Dashboard). Keyed by title so a new screen inserts a fresh
+  // region: screen readers miss a role set on an element whose text changes in the same render.
   return (
-    <div className={`panel state${error ? " error" : ""}`} role={error ? "alert" : "status"}>
+    <div className={`panel state${error ? " error" : ""}`} role={spinner ? "status" : undefined}>
       {spinner && <span className="spinner" aria-hidden />}
-      <h2>{title}</h2>
+      <div key={title} role={spinner ? undefined : error ? "alert" : "status"}>
+        <h1 tabIndex={-1}>{title}</h1>
+      </div>
       <div className="muted">{children}</div>
     </div>
   );
@@ -138,31 +172,26 @@ function Ready({ data }: { data: AspectSummary }) {
   const { overall, trend, steam_rating: rating } = data;
   const first = trend[0]?.date;
   const last = trend.at(-1)?.date;
+  const peak = spike(trend);
+  const result = comparison(data);
+  // A link ending in #reviews arrives before this screen exists (the page showed "Loading…"),
+  // so the browser's own jump to the anchor found nothing.
+  useEffect(() => {
+    if (window.location.hash === "#reviews") document.getElementById("reviews")?.scrollIntoView();
+  }, []);
   return (
     <>
       <Link href="/" className="back">
-        ← All games
+        <span aria-hidden>←</span> All games
       </Link>
       <div className="game-head">
         <div>
-          <h1>{data.name}</h1>
-          <dl className="facts">
-            {rating && (
-              <>
-                <dt>Steam rating</dt>
-                <dd>
-                  <RatingLabel rating={rating} />
-                </dd>
-              </>
-            )}
-            <dt>Analyzed</dt>
-            <dd>
-              The {overall.total.toLocaleString("en-US")} most recent English reviews
-              {first && ` (${first} to ${last})`}. Older reviews are not included.
-            </dd>
-            <dt>Our read</dt>
-            <dd>{pct(overall.positive_pct) ?? 0}% positive, as predicted by the sentiment model</dd>
-          </dl>
+          <h1 tabIndex={-1}>{data.name}</h1>
+          <p className="sample">
+            The {overall.total.toLocaleString("en-US")} most recent English reviews
+            {first && last && `, ${formatDate(first)} to ${formatDate(last)}`}. Older reviews are
+            not included.
+          </p>
         </div>
         <div className="art">
           {/* eslint-disable-next-line @next/next/no-img-element -- Steam CDN banner */}
@@ -176,34 +205,42 @@ function Ready({ data }: { data: AspectSummary }) {
         </div>
       </div>
 
-      <p className="verdict">{verdict(data)}</p>
-      <Comparison data={data} />
+      <Headline data={data} rating={rating} result={result} />
 
       <section aria-labelledby="topics-heading">
         <div className="section-head">
           <h2 id="topics-heading">By topic</h2>
-          <p className="muted">
-            Each review is split into sentences and every sentence is matched to a topic. The
-            share is how many of the reviews that bring a topic up read as positive.
-          </p>
+          <p className="muted">How many of the reviews that bring each topic up read as positive.</p>
         </div>
-        <ul className="aspects">
+        <ul className="topics panel">
           {data.aspects.map((a) => (
-            <AspectCard key={a.aspect} aspect={a} />
+            <TopicRow
+              key={a.aspect}
+              appid={data.appid}
+              aspect={a}
+              weak={result?.weaker === true && result.aspect === a.aspect}
+            />
           ))}
         </ul>
       </section>
 
-      <section className="panel">
-        <h2>Reviews per topic</h2>
-        <AspectChart aspects={data.aspects} />
+      <section className="panel" aria-labelledby="trend-heading">
+        <div className="section-head">
+          <h2 id="trend-heading">Reviews per day</h2>
+          <p className="muted">Split by how the sentiment model reads each review.</p>
+        </div>
+        {peak && (
+          <p className="callout">
+            {peak.text}{" "}
+            <Link href={`/games/${data.appid}?day=${peak.date}&sentiment=negative#reviews`}>
+              Read that day&apos;s negative reviews
+            </Link>
+          </p>
+        )}
+        <TrendChart trend={trend} spike={peak?.date} />
       </section>
-      <section className="panel">
-        <h2>Reviews per day</h2>
-        <TrendChart trend={trend} />
-      </section>
-      <section className="panel">
-        <h2>Reviews</h2>
+      <section className="panel" id="reviews" aria-labelledby="reviews-heading">
+        <h2 id="reviews-heading">Reviews</h2>
         <ReviewList appid={data.appid} aspects={data.aspects.map((a) => a.aspect)} />
       </section>
     </>
@@ -220,105 +257,201 @@ function RatingLabel({ rating }: { rating: SteamRating }) {
     <>
       <span className={`rating-${tone}`}>{rating.score_desc}</span>
       {rating.positive_pct !== null &&
-        ` · ${storePct(rating)}% of ${rating.total.toLocaleString("en-US")} reviews`}
-      <span className="muted"> (English reviews, all time)</span>
+        `, ${storePct(rating)}% of ${rating.total.toLocaleString("en-US")} reviews`}
     </>
   );
 }
 
-function Comparison({ data }: { data: AspectSummary }) {
-  const result = comparison(data);
-  if (!result) return null;
-  const { label, phrase } = copyFor(result.aspect);
+/** The page's one claim: Steam's thumbs against the weakest topic, then the method behind it. */
+function Headline({
+  data,
+  rating,
+  result,
+}: {
+  data: AspectSummary;
+  rating: SteamRating | null;
+  result: Comparison | null;
+}) {
+  const support = result && strength(data);
+  const sample = data.steam_sample.total;
+  const disagree = data.disagreements;
   return (
-    <div className="compare panel">
-      <div className="figure">
-        <span className="num">{result.steamPct}%</span>
-        <span className="label">Steam thumbs up</span>
-      </div>
-      <div className="figure">
-        <span className={`num${result.weaker ? " weak" : ""}`}>{result.aspectPct}%</span>
-        <span className="label">{label}</span>
-      </div>
-      <p>{result.text}</p>
-      <p className="fine">
-        Both numbers come from the same {data.steam_sample.total.toLocaleString("en-US")} reviews.
-        Steam&apos;s is the reviewers&apos; own thumbs up; the other is the share of reviews
-        mentioning {phrase} that the model reads as positive.
-      </p>
-    </div>
+    <section className="headline panel" aria-labelledby="headline">
+      <h2 id="headline" className="verdict">
+        {result?.text ?? verdict(data)}
+      </h2>
+      {result && (
+        // Two bars on one 0-100% scale, so the gap between the thumbs and the topic is seen,
+        // not only read. The numbers are text; the bars repeat them and are hidden from AT.
+        <div className="figures">
+          <div className="figure">
+            <span className="num">{result.steamPct}%</span>
+            <span className="label">Recommend it on Steam</span>
+            <span className="meter" aria-hidden>
+              <span style={{ width: `${result.steamPct}%` }} />
+            </span>
+          </div>
+          <div className={`figure${result.weaker ? " weak" : ""}`}>
+            <span className="num">{result.aspectPct}%</span>
+            <span className="label">{copyFor(result.aspect).label} reviews read as positive</span>
+            <span className="meter" aria-hidden>
+              <span style={{ width: `${result.aspectPct}%` }} />
+            </span>
+          </div>
+        </div>
+      )}
+      {support && <p className="support muted">{support}</p>}
+      {disagree !== undefined && disagree > 0 && sample > 0 && (
+        // One line of the caveat, where the numbers are: the thumb and the model's reading of
+        // the words differ on these reviews, and they are the ones worth reading.
+        <p className="disagree-note">
+          The model&apos;s reading and the reviewer&apos;s thumb differ on{" "}
+          {disagree.toLocaleString("en-US")} of these reviews ({Math.round((100 * disagree) / sample)}
+          %).{" "}
+          <Link href={`/games/${data.appid}?disagree=1#reviews`}>
+            Read those {disagree.toLocaleString("en-US")} reviews
+          </Link>
+        </p>
+      )}
+      <details className="about">
+        <summary>About these numbers</summary>
+        <ul>
+          {result && (
+            <li>
+              Both figures come from the same {sample.toLocaleString("en-US")} reviews. The first is
+              the reviewers&apos; own thumbs up on Steam; the second is the share of reviews
+              mentioning {copyFor(result.aspect).phrase} that the sentiment model reads as positive.
+            </li>
+          )}
+          {disagree !== undefined && disagree > 0 && sample > 0 && (
+            <li>
+              The model and the reviewer disagree on {disagree.toLocaleString("en-US")} of these
+              reviews ({Math.round((100 * disagree) / sample)}%). Steam records the thumb; the model
+              reads the words, and people often recommend a game while listing its faults, or write
+              warmly about one they don&apos;t recommend. Those reviews are marked in the list
+              below.
+            </li>
+          )}
+          {rating && (
+            <li>
+              Steam&apos;s store rating counts every English review, not only these:{" "}
+              <RatingLabel rating={rating} />.
+            </li>
+          )}
+          {/* Hand-copied from the eval reports; update them after retraining or retuning.
+              Sentiment: negative precision 0.643 / recall 0.813 (docs/eval/sentiment_report.txt),
+              not accuracy, which a model answering "positive" every time already gets to 78%.
+              Tagging: accuracy 0.621 vs baseline 0.329 (docs/eval/aspect_report.txt). */}
+          <li>
+            The sentiment model reads {pct(data.overall.positive_pct) ?? 0}% of these reviews as
+            positive. Tested on 1,000 reviews it had not seen, when it called a review negative it
+            was right about 2 times in 3, and it caught about 4 in 5 of the negative reviews. It is
+            weakest on games nearly everyone likes, where negative reviews are rare.
+          </li>
+          <li>
+            Each review is split into sentences, and each sentence is matched to the topic whose
+            example phrases it is closest to in meaning, or to none. That matched 62% of 140
+            hand-labelled sentences, against 33% for always guessing &ldquo;no topic&rdquo;. The
+            phrases were tuned on those same sentences, so that figure is optimistic: expect some
+            quotes under the wrong topic. A quote&apos;s thumb is whether its reviewer recommends
+            the game on Steam, as in the review list.
+          </li>
+          <li>
+            <a href={METHOD_URL}>How it works and how it was measured</a>
+          </li>
+        </ul>
+      </details>
+    </section>
   );
 }
 
-function AspectCard({ aspect: a }: { aspect: AspectStats }) {
+const METHOD_URL = "https://github.com/pmNepomuceno/steam-review-analyzer#readme";
+
+function TopicRow({
+  appid,
+  aspect: a,
+  weak,
+}: {
+  appid: number;
+  aspect: AspectStats;
+  weak: boolean; // the topic the headline names as the weak spot
+}) {
   const { label, description } = copyFor(a.aspect);
   const share = pct(a.positive_pct);
+  // Under MIN_MENTIONS a share is noise (one review moves Hades' 12 performance reviews by 8
+  // points): no percentage and no quotes to read a verdict into, only the reviews themselves.
+  const judged = share !== null && a.total >= MIN_MENTIONS;
+  const reviews = (n: number) => `${n.toLocaleString("en-US")} review${n === 1 ? "" : "s"}`;
+  const about = <span className="sr-only"> about {label.toLowerCase()}</span>;
   return (
-    <li className="aspect">
-      <div>
+    <li className={`topic${judged ? "" : " thin"}`}>
+      <div className="topic-name">
         <h3>{label}</h3>
         <p className="desc">{description}</p>
       </div>
-      {share === null ? (
-        <p className="muted">No review in this sample mentions it.</p>
-      ) : (
-        <>
-          <p className="stat">
-            <strong>{share}%</strong>
-            <span>
-              positive · {a.total.toLocaleString("en-US")} review{a.total === 1 ? "" : "s"}
-              {a.total < MIN_MENTIONS && ", too few to judge"}
-            </span>
+      <div className="topic-stat">
+        {judged ? (
+          <>
+            <p className="stat">
+              <strong className={weak ? "weak" : undefined}>{share}%</strong> positive
+            </p>
+            <div
+              className="split"
+              role="img"
+              aria-label={`${a.positive} positive and ${a.negative} negative reviews`}
+            >
+              {a.positive > 0 && <span className="pos" style={{ flex: a.positive }} />}
+              {a.negative > 0 && <span className="neg" style={{ flex: a.negative }} />}
+            </div>
+          </>
+        ) : (
+          <p className="muted">
+            {a.total === 0
+              ? "No review in this sample mentions it."
+              : `Only ${reviews(a.total)} mention it: too few to judge.`}
           </p>
-          <div
-            className="split"
-            role="img"
-            aria-label={`${a.positive} positive and ${a.negative} negative reviews`}
-          >
-            {a.positive > 0 && <span className="pos" style={{ flex: a.positive }} />}
-            {a.negative > 0 && <span className="neg" style={{ flex: a.negative }} />}
-          </div>
-        </>
-      )}
-      {a.quotes.length > 0 && (
-        <ul className="quotes" aria-label={`What reviews say about ${label}`}>
+        )}
+        {a.total > 0 && (
+          // One link per topic: the negative reviews when there are some (the topic's other
+          // reviews are one Topic filter away in the list), else all of them.
+          <p className="counts">
+            {judged && a.negative > 0 ? (
+              <>
+                {reviews(a.total)}
+                {" · "}
+                <Link href={`/games/${appid}?aspect=${a.aspect}&sentiment=negative#reviews`}>
+                  Read {a.negative.toLocaleString("en-US")} negative
+                  <span className="sr-only"> reviews</span>
+                  {about}
+                </Link>
+              </>
+            ) : (
+              <Link href={`/games/${appid}?aspect=${a.aspect}#reviews`}>
+                {judged ? `Read ${reviews(a.total)}` : "Read them"}
+                {about}
+              </Link>
+            )}
+          </p>
+        )}
+      </div>
+      {judged && a.quotes.length > 0 && (
+        <ul className="quotes" aria-label={`What reviews say about ${label.toLowerCase()}`}>
           {a.quotes.map((q) => (
-            <li key={q.text} className={q.sentiment}>
-              <Thumb up={q.sentiment === "positive"} />
-              <blockquote>&ldquo;{q.text}&rdquo;</blockquote>
+            // The reviewer's thumb, as in the review list; none for a quote stored without it.
+            <li key={q.text} className={q.voted_up == null ? undefined : q.voted_up ? "up" : "down"}>
+              {q.voted_up == null ? (
+                <span />
+              ) : (
+                <Thumb
+                  up={q.voted_up}
+                  label={q.voted_up ? "The reviewer recommends it" : "The reviewer doesn't recommend it"}
+                />
+              )}
+              <blockquote>&ldquo;{quoteText(q.text)}&rdquo;</blockquote>
             </li>
           ))}
         </ul>
       )}
     </li>
-  );
-}
-
-function Thumb({ up }: { up: boolean }) {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      role="img"
-      aria-label={up ? "From a positive review" : "From a negative review"}
-    >
-      {up ? (
-        <>
-          <path d="M7 10v12" />
-          <path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z" />
-        </>
-      ) : (
-        <>
-          <path d="M17 14V2" />
-          <path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z" />
-        </>
-      )}
-    </svg>
   );
 }

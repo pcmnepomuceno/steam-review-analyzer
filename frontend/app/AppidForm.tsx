@@ -11,7 +11,8 @@ const MIN_CHARS = 2; // the API's own minimum
 /**
  * Search Steam by name or appid, with a suggestion list (an ARIA combobox). Picking any result
  * opens /games/{appid}; the dashboard there shows whatever the API answers, including the
- * "not in this demo" screen for a game that was not analyzed ahead of time.
+ * "not in this demo" screen for a game that was not analyzed ahead of time. Each suggestion
+ * says which of those it will be, and games with results come first.
  */
 export default function AppidForm({ analyzed }: { analyzed?: Set<number> }) {
   const router = useRouter();
@@ -52,7 +53,15 @@ export default function AppidForm({ analyzed }: { analyzed?: Set<number> }) {
   }, [term, searchable, router]);
 
   const current = searchable && answer?.term === term ? answer.result : null;
-  const results = current?.kind === "ready" ? current.data.slice(0, 8) : [];
+  const results =
+    current?.kind === "ready"
+      ? current.data
+          .map((r) => ({ ...r, availability: availabilityOf(r, analyzed) }))
+          // Stable: Steam's relevance order within each group.
+          .sort((a, b) => Number(b.availability === "analyzed") - Number(a.availability === "analyzed"))
+          .slice(0, 8)
+      : [];
+  const blocked = results.some((r) => r.availability === "unavailable");
   const expanded = open && results.length > 0;
   const digits = /^\d+$/.test(term) ? Number(term) : null;
 
@@ -67,7 +76,10 @@ export default function AppidForm({ analyzed }: { analyzed?: Set<number> }) {
     status = digits ? `No Steam game found for “${term}”; press Enter to try appid ${digits} anyway.` : `No Steam games match “${term}”.`;
   else if (current && current.kind !== "ready")
     status = "Steam search is unavailable right now. You can still enter an appid.";
-  else if (expanded) status = `${results.length} suggestion${results.length === 1 ? "" : "s"}; use the arrow keys to choose.`;
+  else if (expanded)
+    status =
+      `${results.length} suggestion${results.length === 1 ? "" : "s"}; use the arrow keys to choose.` +
+      (blocked ? " This demo opens only the games marked Analyzed." : "");
   else if (!term) status = "For example Hades, or its appid 1145360 from the store URL.";
 
   return (
@@ -97,7 +109,7 @@ export default function AppidForm({ analyzed }: { analyzed?: Set<number> }) {
             aria-expanded={expanded}
             aria-controls={listId}
             aria-activedescendant={expanded && active >= 0 ? `${listId}-${active}` : undefined}
-            placeholder="Search Steam by name or appid"
+            placeholder="Search Steam for a game"
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
@@ -146,20 +158,21 @@ export default function AppidForm({ analyzed }: { analyzed?: Set<number> }) {
                   <span className="name">{r.name}</span>
                   <span className="sub">
                     appid {r.appid}
-                    {analyzed &&
-                      (analyzed.has(r.appid) ? (
-                        <span className="tag">Analyzed</span>
-                      ) : (
-                        <span className="tag dim">Not analyzed</span>
-                      ))}
+                    {r.availability && (
+                      <span className={`tag${r.availability === "analyzed" ? "" : " dim"}`}>
+                        {AVAILABILITY_LABEL[r.availability]}
+                      </span>
+                    )}
                   </span>
                 </span>
               </li>
             ))}
           </ul>
         </div>
+        {/* "Open", not "Analyze": a deployment without on-demand processing only opens games
+            analyzed ahead of time, and says so for any other. */}
         <button type="submit" className="primary">
-          Analyze
+          Open
         </button>
       </form>
       <p className="search-status" aria-live="polite">
@@ -167,4 +180,17 @@ export default function AppidForm({ analyzed }: { analyzed?: Set<number> }) {
       </p>
     </div>
   );
+}
+
+const AVAILABILITY_LABEL = {
+  analyzed: "Analyzed",
+  on_demand: "Not analyzed yet",
+  unavailable: "Not in this demo",
+} as const;
+
+/** The API's answer, or for an API older than that field, whether the homepage lists it. */
+function availabilityOf(r: SearchResult, analyzed?: Set<number>): SearchResult["availability"] {
+  if (r.availability) return r.availability;
+  if (!analyzed) return undefined;
+  return analyzed.has(r.appid) ? "analyzed" : "on_demand";
 }

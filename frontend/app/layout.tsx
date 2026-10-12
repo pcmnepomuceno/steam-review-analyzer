@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import "./globals.css";
+import ThemeToggle from "./ThemeToggle";
 
 // Steam's own face (Motiva Sans) is Valve's; Figtree is a close, freely licensed match.
 const sans = Figtree({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
@@ -21,9 +22,19 @@ export const viewport: Viewport = {
   themeColor: "#171d25",
 };
 
+// Applies the theme ThemeToggle saved before the first paint, so a saved theme doesn't flash
+// and the pages stay static (a cookie read on the server would render them per request).
+// Without a saved theme, globals.css follows prefers-color-scheme. Next's guide:
+// node_modules/next/dist/docs/01-app/02-guides/preventing-flash-before-hydration.md
+const THEME_SCRIPT = `(function(){try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}})()`;
+
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={sans.variable}>
+    // suppressHydrationWarning: the script above may set data-theme before React hydrates.
+    <html lang="en" className={sans.variable} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
       <body>
         <header className="site-header">
           <div>
@@ -35,6 +46,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               </svg>
               Steam Review <span>Analyzer</span>
             </Link>
+            <ThemeToggle />
           </div>
         </header>
         <main>{children}</main>

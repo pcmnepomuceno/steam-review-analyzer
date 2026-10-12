@@ -18,10 +18,15 @@ class Quote(BaseModel):
 
     text: str
     sentiment: Literal["positive", "negative"]
+    # That reviewer's thumb on Steam; None for quotes stored before it was (until --force).
+    voted_up: bool | None = None
 
 
-class AspectSentiment(SentimentCounts):
+class AspectCounts(SentimentCounts):
     aspect: str
+
+
+class AspectSentiment(AspectCounts):
     # Up to 3 example sentences: mostly negative for a weak aspect (under 50% positive, or
     # well below the game's overall share), mostly positive otherwise; may be empty.
     quotes: list[Quote]
@@ -53,6 +58,8 @@ class AspectSummary(BaseModel):
     trend: list[TrendPoint]  # oldest day first, every day between oldest and newest review
     # Steam's thumbs (voted_up) on the same reviews as `overall`, for a like-for-like check.
     steam_sample: SentimentCounts
+    # Reviews in `overall` whose predicted sentiment differs from the reviewer's thumb.
+    disagreements: int
     steam_rating: SteamRating | None  # None if Steam had none when the game was processed
 
 
@@ -82,10 +89,20 @@ class GameListItem(AvailableGame):
     analyzed_at: datetime | None  # games.aspects_processed_at
 
 
+class GameCard(GameListItem):
+    """A homepage card: enough of /aspects to state the game's headline comparison."""
+
+    aspects: list[AspectCounts]
+    steam_sample: SentimentCounts
+
+
 class SearchResult(BaseModel):
     appid: int
     name: str
     image: str | None  # Steam's small capsule image URL
+    # What opening it here gives: results ready ("analyzed"), an analysis run first
+    # ("on_demand"), or the 403 of a deployment without on-demand processing ("unavailable").
+    availability: Literal["analyzed", "on_demand", "unavailable"]
 
 
 class UnavailableStatus(BaseModel):

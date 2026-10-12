@@ -32,6 +32,7 @@ frontend/next-env.d.ts
 # Local agent tooling
 backend/.claude/
 backend/skills-lock.json
+.impeccable/
 
 # Local design screenshots and Steam reference captures (README uses docs/img/)
 docs/m8/screenshots/

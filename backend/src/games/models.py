@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import CheckConstraint, DateTime, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
@@ -29,10 +30,10 @@ class Game(Base):
     # When a run last finished successfully; kept through later failed or forced runs, so it
     # says how old the stored results are (e.g. for a future refresh policy).
     aspects_processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    # Example sentences per aspect for /aspects ({aspect: [{"text", "sentiment"}]}), picked
+    # Example sentences per aspect for /aspects ({aspect: [{"text", "sentiment", "voted_up"}]}), picked
     # once by the run that sets "done". NULL on a game processed before this column existed:
     # it is served without quotes until a --force rerun.
-    aspect_quotes: Mapped[dict[str, list[dict[str, str]]] | None] = mapped_column(JSONB)
+    aspect_quotes: Mapped[dict[str, list[dict[str, Any]]] | None] = mapped_column(JSONB)
     # Steam's own store rating (English, Steam purchasers, all time), fetched by each run
     # (best effort; a failed fetch keeps the previous values). `steam_rating_checked_at` is
     # when a run last asked: set with steam_total NULL means Steam had no rating to give or
@@ -41,3 +42,7 @@ class Game(Base):
     steam_positive: Mapped[int | None] = mapped_column(Integer)
     steam_total: Mapped[int | None] = mapped_column(Integer)
     steam_rating_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The homepage card's inputs, stored by the run that sets "done" so `GET /games` doesn't
+    # re-aggregate review_aspects per visit: {"aspects": [AspectCounts...], "steam_sample":
+    # SentimentCounts}, the same counts /aspects gives. NULL only on a game not yet processed.
+    card_counts: Mapped[dict[str, Any] | None] = mapped_column(JSONB)

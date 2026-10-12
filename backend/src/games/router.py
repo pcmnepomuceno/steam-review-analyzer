@@ -5,14 +5,16 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.config import settings
 from src.database import get_session
 from src.games import service
 from src.games.constants import AspectStatus
 from src.games.dependencies import valid_appid
+from src.games.models import Game
 from src.games.schemas import (
     UNPROCESSED_RESPONSES,
     AspectSummary,
-    GameListItem,
+    GameCard,
     SearchResult,
     SteamRating,
 )
@@ -23,10 +25,10 @@ router = APIRouter(prefix="/games", tags=["games"])
 steam_router = APIRouter(prefix="/steam", tags=["steam"])
 
 
-@router.get("", response_model=list[GameListItem])
-async def list_games(session: Annotated[AsyncSession, Depends(get_session)]) -> list[GameListItem]:
-    """Every game whose results are ready, by name: what the homepage lists."""
-    return await service.list_processed(session)
+@router.get("", response_model=list[GameCard])
+async def list_games(session: Annotated[AsyncSession, Depends(get_session)]) -> list[GameCard]:
+    """Every game whose results are ready, by name, with the counts its homepage card states."""
+    return await service.list_cards(session)
 
 
 @router.get("/{appid}/aspects", response_model=AspectSummary, responses=UNPROCESSED_RESPONSES)
@@ -63,9 +65,22 @@ async def get_aspects(
 async def search(
     q: Annotated[str, Query(min_length=2, max_length=100)],
     http: Annotated[httpx.AsyncClient, Depends(get_http_client)],
+    session: Annotated[AsyncSession, Depends(get_session)],
 ) -> list[SearchResult]:
     """Steam store search, proxied because browsers can't call it (no CORS headers).
 
-    Not limited to analyzed games: opening an unlisted result gets the usual 403 there.
+    Not limited to analyzed games: each result says what opening it here gives, so the
+    typeahead can tell a game it can't open from one it can.
     """
-    return await service.search_steam(http, q)
+    results = await service.search_steam(http, q)
+    games = await service.get_games(session, [r["appid"] for r in results])
+    return [SearchResult(**r, availability=_availability(games.get(r["appid"]))) for r in results]
+
+
+def _availability(game: Game | None) -> str:
+    """Mirrors what `/aspects` answers for the game (see `on_demand_blocked`)."""
+    if game is not None and game.aspects_status == AspectStatus.DONE:
+        return "analyzed"
+    if settings.allow_on_demand_processing or service.opens_without_on_demand(game):
+        return "on_demand"
+    return "unavailable"

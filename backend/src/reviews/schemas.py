@@ -3,6 +3,13 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict
 
 
+class AspectMatch(BaseModel):
+    """One sentence of a review and the aspect it was tagged with."""
+
+    aspect: str
+    text: str
+
+
 class ReviewOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -15,6 +22,7 @@ class ReviewOut(BaseModel):
     created_at: datetime
     predicted_sentiment: str | None  # None until the game is processed
     aspects: list[str] = []  # distinct aspects of the review's units, "none" left out
+    matches: list[AspectMatch] = []  # the units behind `aspects`, in review order
 
 
 class ReviewPage(BaseModel):

@@ -9,8 +9,8 @@ export default async function GamePage({ params }: { params: Promise<{ appid: st
   const appid = Number(raw);
   if (!/^\d+$/.test(raw) || appid < 1 || appid > MAX_APPID) {
     return (
-      <div className="card state error" role="alert">
-        <h2>&ldquo;{raw}&rdquo; is not a Steam appid</h2>
+      <div className="panel state error" role="alert">
+        <h1>&ldquo;{raw}&rdquo; is not a Steam appid</h1>
         <p className="muted">An appid is a positive whole number.</p>
         <Link href="/">Pick another game</Link>
       </div>

@@ -23,9 +23,13 @@
   --negative-text: #e8936a;
   --mixed-text: #c9ad7c;
   --critical: #e8936a;
+  --field-border: #5a7a96; /* 3:1 against --bg and --surface */
+  --placeholder: #a9b9c6; /* 4.5:1 on --field (--text-2 was 3.3:1 there) */
+  /* Steam's green, with dark text: its own light-on-green label is under 3:1. One set for
+     both modes (at least 5.2:1 across the gradient). */
   --cta-from: #75b022;
-  --cta-to: #588a1b;
-  --cta-text: #e6f6cf;
+  --cta-to: #64991f;
+  --cta-text: #0e1a06;
   --shadow: 0 2px 10px rgb(0 0 0 / 0.35);
 }
 
@@ -48,9 +52,8 @@
     --negative-text: #a8441a;
     --mixed-text: #78612c;
     --critical: #a8441a;
-    --cta-from: #5f9a1b;
-    --cta-to: #477414;
-    --cta-text: #ffffff;
+    --field-border: #74889b;
+    --placeholder: #4f5f6e;
     --shadow: 0 2px 10px rgb(27 40 56 / 0.12);
   }
 }
@@ -73,9 +76,8 @@
   --negative-text: #a8441a;
   --mixed-text: #78612c;
   --critical: #a8441a;
-  --cta-from: #5f9a1b;
-  --cta-to: #477414;
-  --cta-text: #ffffff;
+  --field-border: #74889b;
+  --placeholder: #4f5f6e;
   --shadow: 0 2px 10px rgb(27 40 56 / 0.12);
 }
 
@@ -179,7 +181,33 @@ p {
   margin: 0 auto;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   min-height: 56px;
+}
+
+/* The header is dark in both modes, so the toggle keeps the header's own colors. */
+.theme-toggle {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  background: transparent;
+  color: #c6d4df;
+}
+
+.theme-toggle:focus-visible {
+  outline-color: #66c0f4;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .site-header a {
@@ -200,7 +228,7 @@ p {
 }
 
 main {
-  max-width: 1040px;
+  max-width: calc(1040px + 2 * 16px); /* content column = the header's 1040px, logo aligned */
   margin: 0 auto;
   padding: 32px calc(16px + env(safe-area-inset-right, 0px))
     calc(64px + env(safe-area-inset-bottom, 0px)) calc(16px + env(safe-area-inset-left, 0px));
@@ -232,72 +260,156 @@ main section,
   font-size: 1.0625rem;
 }
 
+/* One row per game: banner, name and claim, then one cell per topic, aligned in columns so
+   the games compare down the page. */
 .games {
   list-style: none;
   padding: 0;
   margin: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 16px;
+  gap: 8px;
 }
 
-.game-card {
+.games-head,
+.strip {
   display: grid;
-  grid-template-rows: auto 1fr;
-  height: 100%;
-  background: var(--surface);
+  grid-template-columns: repeat(5, 80px);
+  gap: 8px;
+}
+
+.games-head {
+  justify-content: end;
+  padding: 0 16px 8px 0;
+  color: var(--text-2);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.game-row {
+  --row-bg: var(--surface);
+  position: relative;
+  display: grid;
+  grid-template-columns: 136px minmax(0, 1fr) auto;
+  gap: 20px;
+  align-items: center;
+  padding: 10px 16px 10px 10px;
+  background: var(--row-bg);
   border-radius: 4px;
-  overflow: hidden;
-  color: inherit;
-  text-decoration: none;
   box-shadow: var(--shadow);
-  transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1), background 160ms;
+  transition: background 160ms;
 }
 
-.game-card:active {
-  transform: scale(0.985);
-}
-
-.game-card .art {
+.game-row .art {
   aspect-ratio: 460 / 215;
+  border-radius: 2px;
+  overflow: hidden;
   background: var(--field);
 }
 
-.game-card img {
+.game-row img {
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.game-card .body {
-  padding: 12px 14px 14px;
-  display: grid;
-  gap: 4px;
-  align-content: start;
+.game-row h3 a {
+  color: var(--text-strong);
+  text-decoration: none;
 }
 
-.game-card h3 {
-  font-size: 1.0625rem;
+/* The name's link covers the whole row. */
+.game-row h3 a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 4px;
 }
 
-.game-card .meta {
+.game-row h3 a:focus-visible {
+  outline: none;
+}
+
+.game-row:has(h3 a:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.game-row .claim {
+  margin-top: 4px;
+  max-width: 60ch;
+  color: var(--text);
+  font-size: 0.9375rem;
+  line-height: 1.45;
+}
+
+.game-row .meta {
+  margin-top: 4px;
   color: var(--text-2);
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .game-card:hover {
-    background: var(--surface-2);
-    transform: translateY(-2px);
+  .game-row:hover {
+    --row-bg: var(--surface-2);
   }
-  .game-card:hover h3 {
+  .game-row:hover h3 a {
     color: var(--link);
   }
 }
 
+.strip {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.strip li {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+
+.strip .name {
+  display: none; /* the column heads name them on wide screens */
+  color: var(--text-2);
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.strip .num {
+  color: var(--text-strong);
+  font-size: 1.125rem;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.strip .weak .num {
+  color: var(--negative-text);
+}
+
+.strip .thin .num {
+  color: var(--text-2);
+}
+
+/* Positive share over the negative remainder, split by a 2px gap in the row's color. */
+.strip .bar {
+  display: flex;
+  height: 4px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: var(--negative);
+}
+
+.strip .bar span {
+  background: var(--positive);
+  border-right: 2px solid var(--row-bg);
+  transition: border-color 160ms;
+}
+
 .skeleton {
-  min-height: 210px;
+  min-height: 88px;
   background: var(--surface);
   border-radius: 4px;
   opacity: 0.6;
@@ -331,7 +443,7 @@ input,
 select {
   font-size: 16px; /* iOS zooms into anything smaller */
   background: var(--field);
-  border: 1px solid transparent;
+  border: 1px solid var(--field-border);
   border-radius: 3px;
   min-height: 44px;
   padding: 8px 12px;
@@ -339,7 +451,7 @@ select {
 }
 
 input::placeholder {
-  color: var(--text-2);
+  color: var(--placeholder);
   opacity: 1;
 }
 
@@ -416,6 +528,11 @@ button:disabled {
   background: var(--field);
 }
 
+/* The tags share --field with the selected row; lift them off it. */
+.suggestions [aria-selected="true"] .tag {
+  background: var(--surface);
+}
+
 @media (hover: hover) and (pointer: fine) {
   .suggestions [role="option"]:hover {
     background: var(--surface-2);
@@ -470,6 +587,12 @@ button:disabled {
   white-space: nowrap;
 }
 
+.tag.active {
+  background: color-mix(in srgb, var(--link) 22%, var(--field));
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
 .tag.dim {
   color: var(--text-2);
 }
@@ -484,8 +607,21 @@ button:disabled {
   gap: 12px;
 }
 
-.state h2 {
+.state h1 {
   margin: 0;
+  font-size: 1.5rem;
+}
+
+/* Appears only once a wait is long enough to need explaining. */
+.state .later {
+  visibility: hidden;
+  animation: reveal 0s 1.5s forwards;
+}
+
+@keyframes reveal {
+  to {
+    visibility: visible;
+  }
 }
 
 .state .muted {
@@ -522,7 +658,12 @@ button:disabled {
   text-align: left;
 }
 
-.state.error h2 {
+/* Focused by script when a screen replaces another (Dashboard), never by tabbing. */
+h1[tabindex="-1"]:focus {
+  outline: none;
+}
+
+.state.error h1 {
   color: var(--critical);
 }
 
@@ -546,7 +687,8 @@ button:disabled {
   .spinner {
     animation-duration: 3s;
   }
-  .game-card,
+  .game-row,
+  .strip .bar span,
   button {
     transition: none;
   }
@@ -557,6 +699,7 @@ button:disabled {
 .back {
   display: inline-flex;
   align-items: center;
+  gap: 6px;
   min-height: 44px;
   margin: -12px 0 8px;
   text-decoration: none;
@@ -583,24 +726,10 @@ button:disabled {
   object-fit: cover;
 }
 
-.facts {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 4px 16px;
-  margin: 16px 0 0;
-  font-size: 0.875rem;
-}
-
-.facts dt {
+.sample {
+  margin-top: 10px;
   color: var(--text-2);
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding-top: 2px;
-}
-
-.facts dd {
-  margin: 0;
+  max-width: 60ch;
 }
 
 .rating-positive {
@@ -615,90 +744,173 @@ button:disabled {
   color: var(--negative-text);
 }
 
-.verdict {
+.headline {
   margin-top: 28px;
-  font-size: 1.375rem;
-  line-height: 1.4;
-  color: var(--text-strong);
-  max-width: 40ch;
+  display: grid;
+  gap: 16px;
+}
+
+.verdict {
+  margin: 0;
+  font-size: 1.5rem;
+  line-height: 1.35;
+  max-width: 48ch;
   text-wrap: pretty;
 }
 
-.compare {
-  margin-top: 20px;
+.figures {
   display: grid;
-  grid-template-columns: auto auto 1fr;
-  gap: 8px 28px;
-  align-items: end;
+  gap: 18px;
+  max-width: 760px;
 }
 
-.compare .figure {
+/* Number left, label over a bar right. Both bars share one 0-100% scale. */
+.figure {
   display: grid;
-  gap: 2px;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 20px;
+  row-gap: 8px;
+  align-items: center;
 }
 
-.compare .num {
-  font-size: 2.5rem;
+.figure .num {
+  grid-row: 1 / 3;
+}
+
+.figure .meter {
+  display: block;
+  height: 12px;
+  border-radius: 2px;
+  background: var(--field);
+  overflow: hidden;
+}
+
+.figure .meter span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--positive);
+}
+
+.figure.weak .meter span {
+  background: var(--negative);
+}
+
+/* Sentence-length labels: small caps would shout them. */
+.figure .label {
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 0.875rem;
+}
+
+.figure .num {
+  font-size: 3rem;
   line-height: 1;
   font-weight: 500;
   color: var(--text-strong);
 }
 
-.compare .num.weak {
+.figure.weak .num {
   color: var(--negative-text);
 }
 
-.compare p {
-  grid-column: 1 / -1;
+.support {
   max-width: 70ch;
+  font-size: 0.9375rem;
 }
 
-.compare .fine {
-  font-size: 0.875rem;
+.disagree-note {
+  max-width: 70ch;
+  font-size: 0.9375rem;
+}
+
+.disagree-note a {
+  white-space: nowrap;
+}
+
+.about {
+  margin-top: 0;
+}
+
+.about ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+  max-width: 38em;
   color: var(--text-2);
 }
 
-.aspects {
+/* Topics as rows of one panel: name, share, quotes. Aligned columns let the shares be
+   compared down the page. */
+.topics {
   list-style: none;
-  padding: 0;
   margin: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
-.aspect {
+.topic {
   display: grid;
-  gap: 10px;
-  align-content: start;
-  background: var(--surface);
-  border-radius: 4px;
-  padding: 18px 18px 20px;
-  box-shadow: var(--shadow);
+  grid-template-columns: 200px 190px minmax(0, 1fr);
+  gap: 12px 32px;
+  align-items: start;
+  padding: 20px 0;
 }
 
-.aspect .desc {
+.topic + .topic {
+  border-top: 1px solid var(--border);
+}
+
+.topic-name {
+  display: grid;
+  gap: 4px;
+}
+
+.topic .desc {
   color: var(--text-2);
   font-size: 0.875rem;
 }
 
-.aspect .stat {
+.topic-stat {
+  display: grid;
+  gap: 8px;
+}
+
+.topic .stat {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  flex-wrap: wrap;
+  color: var(--text-2);
+  font-size: 0.875rem;
 }
 
-.aspect .stat strong {
+.topic .stat strong {
   font-size: 1.75rem;
   line-height: 1;
   font-weight: 500;
   color: var(--text-strong);
 }
 
-.aspect .stat span {
+.topic .stat strong.weak {
+  color: var(--negative-text);
+}
+
+.topic.thin .topic-stat .muted {
+  font-size: 0.875rem;
+}
+
+.counts {
   color: var(--text-2);
   font-size: 0.875rem;
+}
+
+/* 44px tall hit areas without spacing the line out. */
+.counts a {
+  display: inline-block;
+  padding-block: 12px;
+  margin-block: -12px;
 }
 
 /* Positive vs negative share: two segments with a 2px surface gap. */
@@ -727,7 +939,7 @@ button:disabled {
 
 .quotes {
   list-style: none;
-  margin: 4px 0 0;
+  margin: 0;
   padding: 0;
   display: grid;
   gap: 8px;
@@ -751,11 +963,11 @@ button:disabled {
   margin-top: 3px;
 }
 
-.quotes .positive svg {
+.quotes .up svg {
   color: var(--positive-text);
 }
 
-.quotes .negative svg {
+.quotes .down svg {
   color: var(--negative-text);
 }
 
@@ -776,11 +988,22 @@ button:disabled {
   height: 300px;
 }
 
-.chart-note {
-  margin-top: 8px;
-  font-size: 0.875rem;
-  color: var(--text-2);
+.callout {
+  margin-bottom: 12px;
+  color: var(--text-strong);
   max-width: 72ch;
+}
+
+/* Whole phrase on one line, with a 44px hit area that doesn't space the paragraph out. */
+.callout a,
+.about li a {
+  display: inline-block;
+  padding-block: 12px;
+  margin-block: -12px;
+}
+
+#reviews {
+  scroll-margin-top: 16px;
 }
 
 details {
@@ -791,7 +1014,8 @@ details {
 summary {
   cursor: pointer;
   color: var(--link);
-  min-height: 32px;
+  min-height: 44px;
+  width: fit-content;
   display: inline-flex;
   align-items: center;
 }
@@ -834,10 +1058,34 @@ label select {
   letter-spacing: normal;
 }
 
+.list-status {
+  margin-top: 16px;
+  min-height: 1.55em;
+}
+
+.day-filter {
+  display: grid;
+  gap: 4px;
+}
+
+.day-filter > span {
+  font-size: 0.75rem;
+  color: var(--text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.day-filter button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--field-border);
+}
+
 .reviews {
   list-style: none;
   padding: 0;
-  margin: 16px 0;
+  margin: 8px 0 16px;
   display: grid;
   gap: 8px;
   transition: opacity 0.15s;
@@ -848,37 +1096,118 @@ label select {
 }
 
 .reviews li {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  gap: 8px 28px;
   background: var(--surface-2);
   border-radius: 3px;
   padding: 14px 16px;
 }
 
+/* The rail: the two verdicts, the disagreement flag, then the facts. */
 .review-meta {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px 10px;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
   font-size: 0.8125rem;
   color: var(--text-2);
+}
+
+.review-body {
+  min-width: 0;
+}
+
+.review-topics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .review-text {
   margin: 8px 0 0;
   white-space: pre-line;
   overflow-wrap: anywhere;
-  max-width: 75ch;
+  /* em, not ch: Figtree's text averages well under the width of its "0", so 65ch ran to
+     about 95 characters a line. 34em is about 75. */
+  max-width: 36em;
   display: -webkit-box;
   -webkit-line-clamp: 6;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
-.badge {
+.review-text.full {
+  display: block;
+}
+
+/* The sentences a review's topic tags were matched on. */
+mark {
+  background: color-mix(in srgb, var(--link) 12%, transparent);
+  color: var(--text-strong);
+  border-radius: 2px;
+  padding: 0.15em 2px; /* inline: the vertical padding paints, it doesn't move lines */
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+/* A filter that is on or off: pressed takes the field's own raised look, with a border. */
+button.chip {
+  border: 1px solid var(--field-border);
+  background: transparent;
+}
+
+button.chip[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--link) 22%, var(--field));
+  border-color: var(--link);
+  color: var(--text-strong);
+}
+
+/* The sentence matched on the topic the list is filtered to. */
+mark.on {
+  background: color-mix(in srgb, var(--link) 30%, transparent);
+}
+
+button.link {
+  min-height: 44px;
+  margin-bottom: -10px;
+  padding: 0;
+  background: none;
+  color: var(--link);
+}
+
+.vote {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   font-weight: 600;
   color: var(--text-strong);
+}
+
+.vote.up svg {
+  color: var(--positive-text);
+}
+
+.vote.down svg {
+  color: var(--negative-text);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+}
+
+/* Its own pill: where the model and the reviewer part is this list's main finding. */
+.disagree {
+  padding: 2px 8px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--mixed-text) 18%, transparent);
+  color: var(--mixed-text);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
 }
 
 .badge::before {
@@ -904,7 +1233,38 @@ label select {
   flex-wrap: wrap;
 }
 
-/* ---- Phone widths ---- */
+/* ---- Narrower screens ---- */
+
+@media (max-width: 900px) {
+  .reviews li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .review-meta {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 14px;
+  }
+  .games-head {
+    display: none;
+  }
+  .game-row {
+    grid-template-columns: 136px minmax(0, 1fr);
+    align-items: start;
+  }
+  .game-row .strip {
+    grid-column: 2;
+  }
+  .strip .name {
+    display: block;
+  }
+  .topic {
+    grid-template-columns: minmax(0, 1fr) 190px;
+  }
+  .topic .quotes {
+    grid-column: 1 / -1;
+  }
+}
 
 @media (max-width: 720px) {
   main {
@@ -913,44 +1273,48 @@ label select {
   h1 {
     font-size: 1.625rem;
   }
+  /* The banner shrinks beside the title, so the headline stays in the first screen. */
   .game-head {
-    grid-template-columns: 1fr;
-  }
-  .game-head .art {
-    order: -1;
-  }
-  .facts {
-    grid-template-columns: 1fr;
-    gap: 2px;
-  }
-  .facts dd + dt {
-    margin-top: 8px;
+    grid-template-columns: minmax(0, 1fr) 112px;
+    gap: 16px;
   }
   .verdict {
-    font-size: 1.1875rem;
+    font-size: 1.25rem;
   }
-  .compare {
-    grid-template-columns: auto auto;
+  .figure {
+    grid-template-columns: 4.75rem minmax(0, 1fr);
+    column-gap: 14px;
   }
-  .compare .num {
-    font-size: 2rem;
+  .figure .num {
+    font-size: 2.25rem;
   }
-  .aspects {
+  .topic {
     grid-template-columns: 1fr;
+    gap: 10px;
   }
-  /* Phone: banner beside the text, so five games fit in about one screen. */
-  .game-card {
-    grid-template-columns: 128px 1fr;
-    grid-template-rows: auto;
+  .game-row {
+    grid-template-columns: 112px minmax(0, 1fr);
+    gap: 12px 14px;
+    padding: 12px;
   }
-  .game-card .art {
-    align-self: stretch;
-    aspect-ratio: auto;
-    min-height: 64px;
+  .game-row .strip {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
   }
-  .game-card .body {
-    padding: 10px 12px;
-    align-content: center;
+  .strip .name {
+    font-size: 0.6875rem;
+    letter-spacing: -0.01em;
+  }
+  .filters {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .filters label:first-child {
+    grid-column: 1 / -1;
+  }
+  .filters select {
+    width: 100%;
   }
   .panel {
     padding: 16px;

@@ -9,9 +9,12 @@ export type SentimentCounts = {
   positive_pct: number | null;
 };
 
-export type Quote = { text: string; sentiment: Sentiment };
+// `voted_up` is the reviewer's thumb on Steam; null or absent for quotes stored before it.
+export type Quote = { text: string; sentiment: Sentiment; voted_up?: boolean | null };
 
-export type AspectStats = SentimentCounts & { aspect: string; quotes: Quote[] };
+export type AspectCounts = SentimentCounts & { aspect: string };
+
+export type AspectStats = AspectCounts & { quotes: Quote[] };
 
 // Steam's own store rating, as its store page shows it: English reviews, all time.
 export type SteamRating = {
@@ -30,7 +33,12 @@ export type AspectSummary = {
   trend: { date: string; positive: number; negative: number }[];
   steam_sample: SentimentCounts; // Steam's thumbs (voted_up) on the same reviews as `overall`
   steam_rating: SteamRating | null; // null until the API could fetch it from Steam
+  disagreements?: number; // reviews where the model's call and the reviewer's thumb differ
 };
+
+export type AspectMatch = { aspect: string; text: string };
+
+export type ReviewSort = "helpful" | "newest" | "playtime";
 
 export type Review = {
   id: number;
@@ -42,6 +50,7 @@ export type Review = {
   created_at: string;
   predicted_sentiment: Sentiment | null;
   aspects: string[];
+  matches?: AspectMatch[]; // the sentences behind `aspects`; absent from an older API
 };
 
 export type ReviewPage = {
@@ -54,11 +63,22 @@ export type ReviewPage = {
 
 export type AvailableGame = { appid: number; name: string };
 
-// GET /games: every game whose results are ready.
-export type GameListItem = AvailableGame & { review_count: number; analyzed_at: string | null };
+// GET /games: every game whose results are ready, with the counts its card's comparison uses.
+export type GameListItem = AvailableGame & {
+  review_count: number;
+  analyzed_at: string | null;
+  aspects?: AspectCounts[]; // absent from an API deployed before the card counts
+  steam_sample?: SentimentCounts;
+};
 
 // GET /steam/search
-export type SearchResult = { appid: number; name: string; image: string | null };
+// `availability` is absent from an API older than it.
+export type SearchResult = {
+  appid: number;
+  name: string;
+  image: string | null;
+  availability?: "analyzed" | "on_demand" | "unavailable";
+};
 
 /** Steam's wide store banner for an app; not every app has one (hide it on error). */
 export const headerImage = (appid: number) =>

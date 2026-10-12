@@ -5,6 +5,7 @@ import {
   BarChart,
   CartesianGrid,
   Legend,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -12,7 +13,7 @@ import {
 } from "recharts";
 
 import type { AspectSummary } from "../../../lib/api";
-import { copyFor } from "../../../lib/insights";
+import { formatDate } from "../../../lib/insights";
 
 // Colors are CSS variables from globals.css, so light/dark mode needs nothing here.
 const AXIS = { stroke: "var(--border)", tick: { fill: "var(--text-2)", fontSize: 13 } };
@@ -26,8 +27,9 @@ const TOOLTIP = {
   },
   labelStyle: { color: "var(--text-strong)", fontWeight: 500 },
   cursor: { fill: "var(--field)", fillOpacity: 0.5 },
+  // Series order (Positive first, as in the legend), not Recharts' alphabetical default.
+  itemSorter: (item: { dataKey?: unknown }) => (item.dataKey === "positive" ? 0 : 1),
 };
-const label = (aspect: string) => copyFor(aspect).label;
 const LEGEND = {
   itemSorter: null, // keep series order (Positive first), not alphabetical
   formatter: (v: string) => <span style={{ color: "var(--text)" }}>{v}</span>,
@@ -35,53 +37,38 @@ const LEGEND = {
 // Data arrives once, so the grow-in animation only delays reading the chart.
 const STATIC = { isAnimationActive: false };
 
-export function AspectChart({ aspects }: { aspects: AspectSummary["aspects"] }) {
-  const rows = aspects.map((a) => ({
-    topic: label(a.aspect),
-    positive: a.positive,
-    negative: a.negative,
-    total: a.total,
-  }));
+export function TrendChart({ trend, spike }: { trend: AspectSummary["trend"]; spike?: string }) {
+  const first = trend[0]?.date;
+  const last = trend.at(-1)?.date;
   return (
     <>
-      <div className="chart">
+      {/* Recharts' keyboard layer makes the SVG an unnamed role="application" tab stop; the
+          chart is summarized here instead and its numbers are in the table below. */}
+      <div
+        className="chart"
+        role="img"
+        aria-label={
+          first && last
+            ? `Bar chart of reviews per day the model reads as positive and negative, ${formatDate(first)} to ${formatDate(last)}. The numbers are in the table below.`
+            : "Bar chart of reviews per day"
+        }
+      >
         <ResponsiveContainer>
-          <BarChart data={rows} layout="vertical" barGap={2} margin={{ left: 4, right: 16 }}>
-            <CartesianGrid horizontal={false} stroke="var(--border)" />
-            <XAxis type="number" allowDecimals={false} {...AXIS} />
-            <YAxis type="category" dataKey="topic" width={118} {...AXIS} />
-            <Tooltip {...TOOLTIP} />
-            <Legend {...LEGEND} />
-            <Bar {...STATIC} dataKey="positive" name="Positive" fill="var(--positive)" radius={[0, 4, 4, 0]} />
-            <Bar {...STATIC} dataKey="negative" name="Negative" fill="var(--negative)" radius={[0, 4, 4, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-      <p className="chart-note">
-        Reviews with at least one sentence about the topic, by the review&apos;s predicted
-        sentiment. A review counts once per topic however many sentences it has about it, and
-        reviews about none of these topics are left out.
-      </p>
-      <DataTable
-        caption="Show as a table"
-        columns={["topic", "positive", "negative", "total"]}
-        rows={rows}
-      />
-    </>
-  );
-}
-
-export function TrendChart({ trend }: { trend: AspectSummary["trend"] }) {
-  return (
-    <>
-      <div className="chart">
-        <ResponsiveContainer>
-          <BarChart data={trend} margin={{ right: 16 }}>
+          <BarChart data={trend} margin={{ right: 16 }} accessibilityLayer={false}>
             <CartesianGrid vertical={false} stroke="var(--border)" />
-            <XAxis dataKey="date" minTickGap={24} {...AXIS} />
+            <XAxis dataKey="date" minTickGap={24} tickFormatter={shortDate} {...AXIS} />
             <YAxis allowDecimals={false} width={40} {...AXIS} />
-            <Tooltip {...TOOLTIP} />
+            <Tooltip {...TOOLTIP} labelFormatter={(d) => formatDate(String(d))} />
             <Legend {...LEGEND} />
+            {spike && (
+              <ReferenceLine
+                x={spike}
+                stroke="var(--negative-text)"
+                strokeDasharray="3 3"
+                ifOverflow="extendDomain"
+                label={{ value: "Spike", position: "insideTopRight", fill: "var(--negative-text)", fontSize: 13 }}
+              />
+            )}
             {/* A 1px surface-colored stroke on each segment makes a 2px gap between them. */}
             <Bar
               {...STATIC}
@@ -107,12 +94,19 @@ export function TrendChart({ trend }: { trend: AspectSummary["trend"] }) {
       </div>
       <DataTable
         caption="Show as a table"
-        columns={["date", "positive", "negative"]}
-        rows={trend}
+        columns={[
+          ["date", "Date"],
+          ["positive", "Positive"],
+          ["negative", "Negative"],
+        ]}
+        rows={trend.map((d) => ({ ...d, date: formatDate(d.date) }))}
       />
     </>
   );
 }
+
+const SHORT = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+const shortDate = (iso: string) => SHORT.format(new Date(iso));
 
 function DataTable<T extends Record<string, string | number | null>>({
   caption,
@@ -120,7 +114,7 @@ function DataTable<T extends Record<string, string | number | null>>({
   rows,
 }: {
   caption: string;
-  columns: (keyof T & string)[];
+  columns: [keyof T & string, string][]; // [key, header]
   rows: T[];
 }) {
   return (
@@ -129,16 +123,18 @@ function DataTable<T extends Record<string, string | number | null>>({
       <table>
         <thead>
           <tr>
-            {columns.map((c) => (
-              <th key={c}>{c}</th>
+            {columns.map(([key, header]) => (
+              <th key={key} scope="col">
+                {header}
+              </th>
             ))}
           </tr>
         </thead>
         <tbody>
           {rows.map((row, i) => (
             <tr key={i}>
-              {columns.map((c) => (
-                <td key={c}>{row[c]}</td>
+              {columns.map(([key]) => (
+                <td key={key}>{row[key]}</td>
               ))}
             </tr>
           ))}

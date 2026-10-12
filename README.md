@@ -28,7 +28,7 @@ Steam API ──> ingestion ──> Postgres ──> sentiment + aspect ML ─�
 2. **Sentiment.** TF-IDF + logistic regression, trained on Steam's own `voted_up` flag as a weak-supervision label, so no manual sentiment labeling is needed. It is trained once on five cached games pooled (`class_weight="balanced"`), and one model serves any appid.
 3. **Aspects.** Each review is split into sentence and clause units with a rule-based splitter, which also cuts at "but / however / and" because reviews often skip punctuation. Each unit is embedded with `all-MiniLM-L6-v2` on CPU, run as its ONNX export on ONNX Runtime rather than torch, which keeps the API under 512 MB. A unit gets the aspect whose hand-written anchor phrases it is most similar to (max cosine), or `none` below a similarity threshold of 0.40. Anchors were chosen over BERTopic or a fine-tuned classifier because they are explainable and cheap to tune.
 4. **Aggregation.** A background task (14-19 min per game in the production image limited to 0.1 CPU and 512 MB, as on Render's free tier; 11-35 s on a 32-core desktop) writes one row per unit and one predicted sentiment per review. `/aspects` then counts distinct *reviews*, not sentences, per aspect and sentiment, plus a daily trend. While a game is still processing, the API answers `202 {status: "processing"}` instead of empty counts, so "not computed yet" never looks like "no complaints".
-5. **Dashboard.** A Next.js page polls `/aspects` until results are ready and then shows the per-aspect chart, the daily sentiment trend and a review list you can filter by aspect and sentiment. Each backend state has its own screen.
+5. **Dashboard.** A Next.js page polls `/aspects` until results are ready and then leads with the share of reviewers who recommend the game on Steam against the lowest-rated topic, followed by a row per topic (each linking to its reviews), the daily sentiment trend and a review list you can filter by aspect, sentiment and day and sort by helpfulness, playtime or date. Each review marks the sentences its topics were matched on, and flags it when the model's reading disagrees with the reviewer's thumb. The homepage lists every analyzed game with its five topic shares in aligned columns. Each backend state has its own screen.
 
 Stack: FastAPI, SQLAlchemy (async) + Alembic, Postgres, scikit-learn, ONNX Runtime (for the sentence-transformers model), Next.js 16 + Recharts.
 
@@ -126,10 +126,10 @@ After changing anchors or the threshold, rerun `python scripts/evaluate_aspects.
 
 | Endpoint | |
 |---|---|
-| `GET /games` | Games whose analysis is done, with review count and analysis date |
-| `GET /games/{appid}/reviews?limit=&offset=&aspect=&sentiment=` | Cached reviews with predicted sentiment and aspects; ingests on first call |
-| `GET /games/{appid}/aspects` | Per-aspect positive/negative review counts with example sentences, overall counts, daily trend, Steam's thumbs on the same reviews and Steam's store rating |
-| `GET /steam/search?q=` | Steam store search by name or appid (proxied for CORS, cached 60 s per term) |
+| `GET /games` | Games whose analysis is done, with review count, analysis date, per-aspect counts and Steam's thumbs on the same reviews |
+| `GET /games/{appid}/reviews?limit=&offset=&aspect=&sentiment=&sort=&day=&disagree=` | Cached reviews with predicted sentiment, aspects and the sentences each aspect was matched on; `sort` is `newest` (default), `helpful` or `playtime`, `day` a UTC date, `disagree=true` only reviews where the model and the thumb differ; ingests on first call |
+| `GET /games/{appid}/aspects` | Per-aspect positive/negative review counts with example sentences, overall counts, daily trend, Steam's thumbs on the same reviews, how many reviews the model and the thumb disagree on, and Steam's store rating |
+| `GET /steam/search?q=` | Steam store search by name or appid (proxied for CORS, cached 60 s per term), each result marked `analyzed`, `on_demand` or `unavailable` for this deployment |
 | `GET /health` | Liveness |
 
 | Status | Meaning |
