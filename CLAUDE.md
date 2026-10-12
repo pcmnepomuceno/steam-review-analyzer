@@ -10,6 +10,8 @@ M8 (homepage, search, interpretation, theme) is done: `GET /games` lists done ga
 
 The deployed API runs with `ALLOW_ON_DEMAND_PROCESSING=false` (`render.yaml`): at Render's 0.1 CPU one game takes 14-19 min, so the demo serves only games already `done` and answers 403 with the list of them for any other appid. Locally the setting defaults to `true`. Encoder batching across reviews is logged in DECISIONS.md as not attempted; don't start it unasked.
 
+M9 (one-command local setup) is done: `./setup.sh [APPID]` at the repo root takes a fresh clone to a running app (checks tools, creates `.env` if absent, starts the db container, venv, migrations, seeds and processes one game with `backend/scripts/ingest_game.py` + `process_reviews.py`, starts API and dashboard in the background with pid files and logs in `.dev/`, prints whether on-demand processing is on). It is idempotent and trains only when the committed `sentiment.joblib` is missing; `./setup.sh stop` stops the servers. Local only: it changes nothing in the deploy.
+
 **Deployed:** the user deployed by hand. The API runs on Render (Singapore), the dashboard on Vercel (https://steam-review-analyzer-wheat.vercel.app/) and the data on Neon, loaded from the five local games with the README's `pg_dump --data-only` procedure (the real history of the first load, including a failed first attempt, is in DECISIONS.md, 2026-10-01). README.md's live URL is filled in; the demo clip link is still a placeholder the user fills in after recording it. Never deploy or push from here. `docs/PROJECT_BRIEF.md` is the source of truth for scope, data model, endpoints and milestones; `docs/DECISIONS.md` logs choices made while building.
 
 ## Commands
@@ -19,6 +21,7 @@ Backend commands run from `backend/` inside the uv venv (Python 3.12, not the sy
 A trained sentiment model is committed, so a fresh clone serves `/aspects` without training. To train from scratch the order is ingest, train, serve, done by hand: start the API, which runs without a sentiment model (it loads lazily on first use), request `/games/{appid}/reviews` for a few games to cache them, run `python scripts/train_sentiment.py`, and then `/aspects` works without a restart (503 before that). Retraining needs an API restart to pick up the new model.
 
 ```bash
+./setup.sh [APPID]                       # from repo root: everything below in one go, idempotent; ./setup.sh stop stops the servers
 docker compose up -d db                  # from repo root; Postgres on host port 5433 (5432 is often taken)
 cp .env.example .env                     # once; settings are read from the repo-root .env
 cd backend && source .venv/bin/activate  # create with: uv venv --python 3.12 .venv && uv pip install -r requirements/dev.txt

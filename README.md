@@ -85,11 +85,35 @@ The same test shows that the on-demand pipeline works in the production image. B
 
 ## Run it locally
 
-Requires Git, Docker, [uv](https://docs.astral.sh/uv/) and Node 22+. A trained sentiment model is committed (`backend/models_store/sentiment.joblib`), so no training is needed to start.
+Requires Git, Docker (running), [uv](https://docs.astral.sh/uv/) and Node 22+, on Linux, macOS or WSL (the script is bash). A trained sentiment model is committed (`backend/models_store/sentiment.joblib`), so no training is needed to start.
 
 ```bash
 git clone https://github.com/pmNepomuceno/steam-review-analyzer.git
 cd steam-review-analyzer
+./setup.sh
+```
+
+When it finishes, open http://localhost:3000. It prints that `ALLOW_ON_DEMAND_PROCESSING` is enabled: search any Steam game or enter any appid and it is fetched and analyzed live (11-35 s on a desktop CPU), unlike the five-game demo.
+
+The script runs these steps, printing each with a rough time, and stops at the first failure naming the step:
+
+1. Checks Docker (and its daemon), uv, Node 22+, npm and curl.
+2. Creates `.env` from `.env.example` if there is none. An existing `.env` is never touched.
+3. Starts Postgres (`docker compose up -d --wait db`, host port 5433).
+4. Creates `backend/.venv` (Python 3.12), installs `requirements/dev.txt`, runs `alembic upgrade head`.
+5. Fetches and caches a seed game's reviews (`scripts/ingest_game.py`). Default Hades (1145360); pass another appid (`./setup.sh 620`) or set `SEED_APPID`. A bad appid, too few English reviews or a Steam outage prints the reason and stops.
+6. Trains the sentiment model only if `models_store/sentiment.joblib` is missing. It is committed, so normally this is skipped: retraining on one game would replace the evaluated model with a worse one.
+7. Analyzes the seed game (`scripts/process_reviews.py`). The first run downloads the ~90 MB embedding model.
+8. Installs the dashboard's npm dependencies.
+9. Starts the API (:8000) and the dashboard (:3000) in the background, with logs in `.dev/`.
+
+A cold run takes a few minutes, mostly downloads. Re-running skips what is done and takes about ten seconds. Ports 5433, 8000 and 3000 must be free (or held by this script's own earlier run); otherwise it names the busy port. `./setup.sh stop` stops the API and dashboard; Postgres stays up (`docker compose down` stops it).
+
+### Manual setup
+
+The same thing by hand:
+
+```bash
 cp .env.example .env               # local defaults work as-is
 docker compose up -d db            # Postgres on localhost:5433
 
