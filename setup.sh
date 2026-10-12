@@ -3,6 +3,8 @@
 # Safe to re-run: finished steps are detected and skipped.
 #   ./setup.sh [APPID]   seed game (default: SEED_APPID or 1145360, Hades)
 #   ./setup.sh stop      stop the API and dashboard (Postgres stays up)
+# A re-run restarts the API (so it serves the current code and model), and the dashboard when
+# its dependencies were reinstalled.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -25,7 +27,9 @@ pid_alive() { [[ -f "$RUN_DIR/$1.pid" ]] && kill -0 "$(<"$RUN_DIR/$1.pid")" 2>/d
 stop_server() {
   if pid_alive "$1"; then
     # The pid is a process-group leader (setsid), so this takes down uvicorn's reloader or npm's children too.
-    kill -- "-$(<"$RUN_DIR/$1.pid")" 2>/dev/null || true
+    local pid; pid="$(<"$RUN_DIR/$1.pid")"
+    kill -- "-$pid" 2>/dev/null || true
+    for _ in $(seq 50); do kill -0 "$pid" 2>/dev/null || break; sleep 0.2; done
     echo "stopped $1"
   else
     echo "$1 not running"
@@ -73,14 +77,13 @@ echo "docker, uv, node $(node -v): ok"
 
 step "Settings file .env (instant)"
 if [[ -f .env ]]; then echo ".env exists, left untouched"; else cp .env.example .env && echo "created .env from .env.example (local Postgres on :$DB_PORT)"; fi
+grep -Eq "^DATABASE_URL=.*@(localhost|127\.0\.0\.1):$DB_PORT/" .env || die "DATABASE_URL in .env does not point at the local Postgres container (localhost:$DB_PORT). Setup migrates and seeds that database, so point it at the container or use the commands in README.md instead"
 
 step "Postgres container (first run pulls the image: up to a minute)"
-if [[ -n "$(docker compose ps --status running --quiet db)" ]]; then
-  echo "db already running"
-else
+if [[ -z "$(docker compose ps --status running --quiet db)" ]]; then
   port_busy "$DB_PORT" && die "port $DB_PORT is already in use by another process; free it, then re-run (Postgres needs it)"
-  docker compose up -d --wait db
 fi
+docker compose up -d --wait db  # also waits for a container that was just started elsewhere
 
 step "Backend Python environment and migrations (first run: 1-2 minutes of downloads)"
 cd "$ROOT/backend"
@@ -102,14 +105,26 @@ else
 fi
 
 step "Analyze the seed game: sentiment and aspect tagging (first run downloads a ~90 MB model, then 15-40 s; skipped when done)"
-python scripts/process_reviews.py "$SEED"
+OUT="$(python scripts/process_reviews.py "$SEED" | tee /dev/stderr)"
+# A first run that failed or was interrupted is skipped, not redone: this is the user's own
+# seed game, so retry it.
+if [[ "$OUT" == *"--force retries it"* ]]; then
+  echo "previous analysis did not finish: retrying"
+  python scripts/process_reviews.py --force "$SEED"
+fi
 
 step "Dashboard dependencies (first run: 1-3 minutes)"
 cd "$ROOT/frontend"
-if [[ -d node_modules && node_modules -nt package-lock.json ]]; then echo "node_modules up to date"; else npm ci; fi
+if [[ -d node_modules && node_modules -nt package-lock.json ]]; then
+  echo "node_modules up to date"
+else
+  stop_server web  # npm ci deletes node_modules under a running dev server
+  npm ci
+fi
 
 step "Starting the API and the dashboard (the dashboard's first compile takes up to a minute)"
 cd "$ROOT/backend"
+stop_server api  # no --reload: a running one would keep the old code and model
 start_server api "$API_PORT" "http://localhost:$API_PORT/health" "exec uvicorn src.main:app --port $API_PORT"
 cd "$ROOT/frontend"
 start_server web "$WEB_PORT" "http://localhost:$WEB_PORT/" "exec npm run dev"
