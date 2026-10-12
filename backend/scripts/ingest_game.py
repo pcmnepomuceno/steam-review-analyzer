@@ -20,19 +20,15 @@ if str(BACKEND_DIR) not in sys.path:
 async def run(appid: int) -> int:
     from src.database import SessionLocal, engine
     from src.exceptions import AppError
-    from src.games import service as games_service
     from src.reviews.ingestion import new_client
     from src.reviews.service import ensure_ingested
 
     try:
         async with SessionLocal() as session:
-            if games_service.is_ingested(await games_service.get_game(session, appid)):
-                print(f"{appid}: already ingested")
-                return 0
             start = time.perf_counter()
             async with new_client() as http:
                 await ensure_ingested(session, http, appid)
-            print(f"{appid}: ingested in {time.perf_counter() - start:.1f}s")
+            print(f"{appid}: cached ({time.perf_counter() - start:.1f}s)")
         return 0
     except AppError as exc:
         print(f"{appid}: cannot ingest: {exc.detail}", file=sys.stderr)
