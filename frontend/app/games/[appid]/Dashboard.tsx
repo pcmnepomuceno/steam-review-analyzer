@@ -289,6 +289,18 @@ function Headline({ data, rating }: { data: AspectSummary; rating: SteamRating |
         </div>
       )}
       {support && <p className="support muted">{support}</p>}
+      {disagree !== undefined && disagree > 0 && sample > 0 && (
+        // One line of the caveat, where the numbers are: the thumb and the model's reading of
+        // the words differ on these reviews, and they are the ones worth reading.
+        <p className="disagree-note">
+          The model&apos;s reading and the reviewer&apos;s thumb differ on{" "}
+          {disagree.toLocaleString("en-US")} of these reviews ({Math.round((100 * disagree) / sample)}
+          %).{" "}
+          <Link href={`/games/${data.appid}?disagree=1#reviews`}>
+            Read those {disagree.toLocaleString("en-US")} reviews
+          </Link>
+        </p>
+      )}
       <details className="about">
         <summary>About these numbers</summary>
         <ul>

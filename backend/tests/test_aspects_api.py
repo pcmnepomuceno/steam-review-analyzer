@@ -306,6 +306,19 @@ async def test_reviews_filter_by_aspect_and_sentiment(client, engine, seeded, ml
     assert empty.json()["total"] == 0 and empty.json()["items"] == []
 
 
+async def test_reviews_filter_by_disagreement(client, engine, seeded, ml_calls):
+    url = f"/games/{APPID}/reviews"
+
+    await process(engine)
+
+    body = (await client.get(url, params={"disagree": True})).json()
+    assert sorted(r["id"] for r in body["items"]) == [1, 4]  # the /aspects `disagreements`
+    assert body["total"] == (await client.get(f"/games/{APPID}/aspects")).json()["disagreements"]
+
+    both = (await client.get(url, params={"disagree": True, "aspect": "bugs"})).json()
+    assert [r["id"] for r in both["items"]] == [1]
+
+
 async def test_reviews_carry_their_sentiment_and_aspects(client, engine, seeded, ml_calls):
     url = f"/games/{APPID}/reviews"
     before = (await client.get(url)).json()["items"]

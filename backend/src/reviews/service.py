@@ -79,12 +79,15 @@ async def list_reviews(
     sentiment_label: str | None = None,
     sort: constants.ReviewSort = constants.ReviewSort.NEWEST,
     day: date | None = None,
+    disagree: bool = False,
 ) -> tuple[int, list[ReviewOut]]:
     """A page of the app's reviews in `sort` order, each with its stored aspects.
 
     `aspect` keeps reviews with at least one unit tagged with it; `sentiment_label` keeps
     reviews predicted that way. Both need the app to be processed (`process_reviews`).
     `day` keeps reviews created on that UTC day, the same days as the /aspects trend.
+    `disagree` keeps reviews whose predicted sentiment and thumb differ, the ones /aspects
+    counts as `disagreements`; it needs the app to be processed too.
     """
     where = [Review.appid == appid]
     if aspect is not None:
@@ -94,6 +97,9 @@ async def list_reviews(
         where.append(exists(unit))
     if sentiment_label is not None:
         where.append(Review.predicted_sentiment == sentiment_label)
+    if disagree:
+        where.append(Review.predicted_sentiment.is_not(None))
+        where.append((Review.predicted_sentiment == POSITIVE) != Review.voted_up)
     if day is not None:
         start = datetime.combine(day, datetime.min.time(), UTC)
         where += [Review.created_at >= start, Review.created_at < start + timedelta(days=1)]

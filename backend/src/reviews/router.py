@@ -33,6 +33,7 @@ async def get_reviews(
     sentiment: Annotated[Literal[POSITIVE, NEGATIVE] | None, Query()] = None,
     sort: ReviewSort = ReviewSort.NEWEST,
     day: date | None = None,  # a UTC day, as in the /aspects trend
+    disagree: bool = False,  # only reviews where the model's call and the thumb differ
 ) -> ReviewPage | JSONResponse:
     game = await games_service.get_game(session, appid)
     if (blocked := await service.on_demand_blocked(session, appid, game)) is not None:
@@ -40,9 +41,10 @@ async def get_reviews(
     if not games_service.is_ingested(game):
         await service.ensure_ingested(session, http, appid)
         game = await games_service.get_game(session, appid)
-    if (aspect is not None or sentiment is not None) and game.aspects_status != AspectStatus.DONE:
+    processed_only = aspect is not None or sentiment is not None or disagree
+    if processed_only and game.aspects_status != AspectStatus.DONE:
         return await service.unprocessed_response(session, game)
     total, items = await service.list_reviews(
-        session, appid, limit, offset, aspect, sentiment, sort, day
+        session, appid, limit, offset, aspect, sentiment, sort, day, disagree
     )
     return ReviewPage(appid=appid, total=total, limit=limit, offset=offset, items=items)

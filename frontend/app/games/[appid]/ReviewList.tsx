@@ -41,6 +41,8 @@ export default function ReviewList({ appid, aspects }: { appid: number; aspects:
   const rawDay = search.get("day") ?? "";
   // A real UTC day, as in the trend: 2026-02-30 doesn't survive the round trip through Date.
   const day = isUtcDay(rawDay) ? rawDay : "";
+  // Only the reviews where the model's call and the reviewer's thumb differ (?disagree=1).
+  const disagree = search.get("disagree") === "1";
   const rawOffset = Number(search.get("offset"));
   // Snapped to a page boundary, so "Page N of M" matches the reviews shown.
   const offset =
@@ -61,6 +63,7 @@ export default function ReviewList({ appid, aspects }: { appid: number; aspects:
   if (aspect) params.set("aspect", aspect);
   if (sentiment) params.set("sentiment", sentiment);
   if (day) params.set("day", day);
+  if (disagree) params.set("disagree", "true");
   const query = `/api/games/${appid}/reviews?${params}`;
   const result = answer?.result ?? null;
   const loading = answer?.query !== query;
@@ -123,6 +126,14 @@ export default function ReviewList({ appid, aspects }: { appid: number; aspects:
             ))}
           </select>
         </label>
+        <button
+          type="button"
+          className="chip"
+          aria-pressed={disagree}
+          onClick={() => navigate({ disagree: disagree ? "" : "1", offset: 0 })}
+        >
+          Only where the model disagrees
+        </button>
         {day && (
           <div className="day-filter">
             <span>Day</span>
@@ -138,11 +149,11 @@ export default function ReviewList({ appid, aspects }: { appid: number; aspects:
             </button>
           </div>
         )}
-        {(aspect || sentiment || day) && (
+        {(aspect || sentiment || day || disagree) && (
           <button
             type="button"
             className="clear"
-            onClick={() => navigate({ aspect: "", sentiment: "", day: "", offset: 0 })}
+            onClick={() => navigate({ aspect: "", sentiment: "", day: "", disagree: "", offset: 0 })}
           >
             Clear filters
           </button>

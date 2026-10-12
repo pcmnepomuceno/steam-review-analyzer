@@ -127,7 +127,7 @@ After changing anchors or the threshold, rerun `python scripts/evaluate_aspects.
 | Endpoint | |
 |---|---|
 | `GET /games` | Games whose analysis is done, with review count, analysis date, per-aspect counts and Steam's thumbs on the same reviews |
-| `GET /games/{appid}/reviews?limit=&offset=&aspect=&sentiment=&sort=&day=` | Cached reviews with predicted sentiment, aspects and the sentences each aspect was matched on; `sort` is `newest` (default), `helpful` or `playtime`, `day` a UTC date; ingests on first call |
+| `GET /games/{appid}/reviews?limit=&offset=&aspect=&sentiment=&sort=&day=&disagree=` | Cached reviews with predicted sentiment, aspects and the sentences each aspect was matched on; `sort` is `newest` (default), `helpful` or `playtime`, `day` a UTC date, `disagree=true` only reviews where the model and the thumb differ; ingests on first call |
 | `GET /games/{appid}/aspects` | Per-aspect positive/negative review counts with example sentences, overall counts, daily trend, Steam's thumbs on the same reviews, how many reviews the model and the thumb disagree on, and Steam's store rating |
 | `GET /steam/search?q=` | Steam store search by name or appid (proxied for CORS, cached 60 s per term), each result marked `analyzed`, `on_demand` or `unavailable` for this deployment |
 | `GET /health` | Liveness |
