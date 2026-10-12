@@ -433,13 +433,14 @@ async def retry_failed(session: AsyncSession, game: Game) -> JSONResponse:
     Failed games are never retried by a GET, so a run that kills the host isn't repeated on
     every poll; this runs only on an explicit POST, one run per click. Refused where
     on-demand processing is off (the deployed demo): there a visitor could otherwise start
-    14-19 min runs on the host's CPU. A game that is already pending or processing just
-    answers its 202, so a double click starts nothing twice.
+    14-19 min runs on the host's CPU. Any game that isn't failed answers 409, so a double
+    click queues one run (the second click finds the game pending or processing).
     """
     if not settings.allow_on_demand_processing:
         raise RetryNotAllowed
-    if game.aspects_status == AspectStatus.DONE:
+    if game.aspects_status != AspectStatus.FAILED:
         raise NotFailed(game.appid)
+    sentiment.ensure_loaded()  # 503 before the failure reason is cleared
     await session.execute(
         update(Game)
         .where(Game.appid == game.appid, Game.aspects_status == AspectStatus.FAILED)

@@ -61,10 +61,12 @@ export default function Dashboard({ appid }: { appid: number }) {
     setAttempt((n) => n + 1);
   };
 
-  // Ask the API to rerun a failed analysis, then wait for it like for a new game.
+  // Ask the API to rerun a failed analysis, then wait for it like for a new game. A 409 (the
+  // game is no longer failed) or a 500 (it failed again) are answered by the next poll, which
+  // shows the game's real state.
   const restart = async () => {
     const res = await fetch(`/api/games/${appid}/retry`, { method: "POST" }).catch(() => null);
-    if (res?.ok) return retry();
+    if (res && (res.ok || res.status === 409 || res.status === 500)) return retry();
     setState({
       kind: "error",
       status: res?.status ?? null,

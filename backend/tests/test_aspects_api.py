@@ -748,8 +748,10 @@ async def test_retry_is_refused_where_on_demand_is_off(client, engine, seeded, m
 
 
 async def test_retry_of_a_game_that_is_not_failed(client, engine, seeded, ml_calls):
-    await set_status(engine, AspectStatus.DONE)
-    assert (await client.post(f"/games/{APPID}/retry")).status_code == 409
+    for status in (AspectStatus.DONE, AspectStatus.PENDING, AspectStatus.PROCESSING):
+        await set_status(engine, status)
+        assert (await client.post(f"/games/{APPID}/retry")).status_code == 409
+    assert (await game_status(engine))[0] == AspectStatus.PROCESSING  # untouched, nothing queued
     assert (await client.post("/games/999/retry")).status_code == 404  # unknown game
     assert ml_calls == []
 
