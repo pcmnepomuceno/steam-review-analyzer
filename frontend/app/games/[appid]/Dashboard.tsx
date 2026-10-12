@@ -13,6 +13,7 @@ import {
 } from "../../../lib/api";
 import {
   comparison,
+  type Comparison,
   copyFor,
   formatDate,
   MIN_MENTIONS,
@@ -173,6 +174,11 @@ function Ready({ data }: { data: AspectSummary }) {
   const last = trend.at(-1)?.date;
   const peak = spike(trend);
   const result = comparison(data);
+  // A link ending in #reviews arrives before this screen exists (the page showed "Loading…"),
+  // so the browser's own jump to the anchor found nothing.
+  useEffect(() => {
+    if (window.location.hash === "#reviews") document.getElementById("reviews")?.scrollIntoView();
+  }, []);
   return (
     <>
       <Link href="/" className="back">
@@ -199,7 +205,7 @@ function Ready({ data }: { data: AspectSummary }) {
         </div>
       </div>
 
-      <Headline data={data} rating={rating} />
+      <Headline data={data} rating={rating} result={result} />
 
       <section aria-labelledby="topics-heading">
         <div className="section-head">
@@ -257,16 +263,22 @@ function RatingLabel({ rating }: { rating: SteamRating }) {
 }
 
 /** The page's one claim: Steam's thumbs against the weakest topic, then the method behind it. */
-function Headline({ data, rating }: { data: AspectSummary; rating: SteamRating | null }) {
-  const result = comparison(data);
-  const summary = verdict(data);
+function Headline({
+  data,
+  rating,
+  result,
+}: {
+  data: AspectSummary;
+  rating: SteamRating | null;
+  result: Comparison | null;
+}) {
   const support = result && strength(data);
   const sample = data.steam_sample.total;
   const disagree = data.disagreements;
   return (
     <section className="headline panel" aria-labelledby="headline">
       <h2 id="headline" className="verdict">
-        {result?.text ?? summary}
+        {result?.text ?? verdict(data)}
       </h2>
       {result && (
         // Two bars on one 0-100% scale, so the gap between the thumbs and the topic is seen,
@@ -311,7 +323,7 @@ function Headline({ data, rating }: { data: AspectSummary; rating: SteamRating |
               mentioning {copyFor(result.aspect).phrase} that the sentiment model reads as positive.
             </li>
           )}
-          {disagree !== undefined && sample > 0 && (
+          {disagree !== undefined && disagree > 0 && sample > 0 && (
             <li>
               The model and the reviewer disagree on {disagree.toLocaleString("en-US")} of these
               reviews ({Math.round((100 * disagree) / sample)}%). Steam records the thumb; the model

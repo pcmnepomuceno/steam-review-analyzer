@@ -212,4 +212,17 @@ describe("timeAgo", () => {
     expect(timeAgo(at(2026, 6, 2), now)).toBe("3 months ago");
     expect(timeAgo(at(2024, 9, 2), now)).toBe("2 years ago");
   });
+
+  it("marks a repeated sentence at its own place, not at its first occurrence", () => {
+    expect(
+      highlight("Great game. Great game.", [
+        { aspect: "gameplay", text: "Great game." },
+        { aspect: "story", text: "Great game." },
+      ]),
+    ).toEqual([
+      { text: "Great game.", aspect: "gameplay" },
+      { text: " ", aspect: null },
+      { text: "Great game.", aspect: "story" },
+    ]);
+  });
 });

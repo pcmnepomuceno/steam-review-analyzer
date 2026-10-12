@@ -212,8 +212,7 @@ export function highlight(text: string, matches: AspectMatch[]): Segment[] {
   let from = 0;
   for (const m of matches) {
     // Matches come in review order, so each is searched for after the previous one.
-    let start = text.indexOf(m.text, from);
-    if (start < 0) start = text.indexOf(m.text);
+    const start = text.indexOf(m.text, from);
     if (start < 0 || !m.text) continue;
     const end = start + m.text.length;
     if (spans.some((s) => start < s.end && end > s.start)) continue;
