@@ -18,6 +18,8 @@ class Quote(BaseModel):
 
     text: str
     sentiment: Literal["positive", "negative"]
+    # That reviewer's thumb on Steam; None for quotes stored before it was (until --force).
+    voted_up: bool | None = None
 
 
 class AspectCounts(SentimentCounts):

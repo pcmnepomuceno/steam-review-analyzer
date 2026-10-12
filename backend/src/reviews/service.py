@@ -433,7 +433,7 @@ async def aspect_summary(session: AsyncSession, game: Game) -> dict[str, Any]:
     return {"appid": game.appid, "status": "ready", **summary}
 
 
-async def _select_quotes(session: AsyncSession, appid: int) -> dict[str, list[dict[str, str]]]:
+async def _select_quotes(session: AsyncSession, appid: int) -> dict[str, list[dict[str, Any]]]:
     """Each aspect's example sentences (`_pick_quotes`), from the app's stored results.
 
     Run once by `process_reviews` inside its final write transaction, so it sees that run's
@@ -520,8 +520,11 @@ async def _summary_counts(session: AsyncSession, appid: int) -> dict[str, Any]:
     }
 
 
-async def _quote_candidates(session: AsyncSession, appid: int) -> dict[str, dict[str, list[str]]]:
-    """aspect -> sentiment -> the most aspect-like sentences of that game, best first.
+async def _quote_candidates(
+    session: AsyncSession, appid: int
+) -> dict[str, dict[str, list[tuple[str, bool]]]]:
+    """aspect -> sentiment -> the most aspect-like sentences of that game, best first, each
+    with its reviewer's thumb (`voted_up`).
 
     Ranked by similarity to the aspect's anchors, the same score that tagged them, within
     QUOTE_MIN_CHARS..QUOTE_MAX_CHARS. A sentence is kept only if the sentiment model, run on
@@ -539,6 +542,7 @@ async def _quote_candidates(session: AsyncSession, appid: int) -> dict[str, dict
             ReviewAspect.aspect_label,
             Review.predicted_sentiment,
             ReviewAspect.sentence_text,
+            Review.voted_up,
             rank.label("rank"),
         )
         .join(Review, Review.id == ReviewAspect.review_id)
@@ -552,36 +556,43 @@ async def _quote_candidates(session: AsyncSession, appid: int) -> dict[str, dict
         .subquery()
     )
     rows = await session.execute(
-        select(ranked.c.aspect_label, ranked.c.predicted_sentiment, ranked.c.sentence_text)
+        select(
+            ranked.c.aspect_label,
+            ranked.c.predicted_sentiment,
+            ranked.c.sentence_text,
+            ranked.c.voted_up,
+        )
         .where(ranked.c.rank <= constants.QUOTE_CANDIDATES)
         .order_by(ranked.c.rank)
     )
     rows = list(rows)
-    agrees = await asyncio.to_thread(sentiment.predict_labels, [s for _, _, s in rows])
-    out: dict[str, dict[str, list[str]]] = {}
-    for (aspect, sent, sentence), own in zip(rows, agrees, strict=True):
+    agrees = await asyncio.to_thread(sentiment.predict_labels, [s for _, _, s, _ in rows])
+    out: dict[str, dict[str, list[tuple[str, bool]]]] = {}
+    for (aspect, sent, sentence, up), own in zip(rows, agrees, strict=True):
         if own == sent:
-            out.setdefault(aspect, {}).setdefault(sent, []).append(sentence)
+            out.setdefault(aspect, {}).setdefault(sent, []).append((sentence, up))
     return out
 
 
-def _pick_quotes(candidates: dict[str, list[str]], preferred: str) -> list[dict[str, str]]:
+def _pick_quotes(
+    candidates: dict[str, list[tuple[str, bool]]], preferred: str
+) -> list[dict[str, Any]]:
     """Up to QUOTES_PER_ASPECT distinct sentences, from the `preferred` sentiment first.
 
     The other sentiment fills in only when the preferred one has fewer than
     QUOTE_MIN_FROM_PREFERRED, so a weak aspect's examples show what people complain about.
     """
     other = POSITIVE if preferred == NEGATIVE else NEGATIVE
-    picked: list[dict[str, str]] = []
+    picked: list[dict[str, Any]] = []
     seen: set[str] = set()
     for sent in (preferred, other):
         if sent == other and len(picked) >= constants.QUOTE_MIN_FROM_PREFERRED:
             break
-        for sentence in candidates.get(sent, []):
+        for sentence, up in candidates.get(sent, []):
             if len(picked) == constants.QUOTES_PER_ASPECT:
                 break
             key = sentence.casefold()
             if key not in seen:
                 seen.add(key)
-                picked.append({"text": sentence, "sentiment": sent})
+                picked.append({"text": sentence, "sentiment": sent, "voted_up": up})
     return picked

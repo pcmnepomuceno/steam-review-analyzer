@@ -916,11 +916,11 @@ h1[tabindex="-1"]:focus {
   margin-top: 3px;
 }
 
-.quotes .positive svg {
+.quotes .up svg {
   color: var(--positive-text);
 }
 
-.quotes .negative svg {
+.quotes .down svg {
   color: var(--negative-text);
 }
 

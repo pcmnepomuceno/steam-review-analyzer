@@ -321,8 +321,8 @@ function Headline({ data, rating }: { data: AspectSummary; rating: SteamRating |
             example phrases it is closest to in meaning, or to none. That matched 62% of 140
             hand-labelled sentences, against 33% for always guessing &ldquo;no topic&rdquo;. The
             phrases were tuned on those same sentences, so that figure is optimistic: expect some
-            quotes under the wrong topic. A quote&apos;s thumb is how the model reads the whole
-            review it comes from.
+            quotes under the wrong topic. A quote&apos;s thumb is whether its reviewer recommends
+            the game on Steam, as in the review list.
           </li>
           <li>
             <a href={METHOD_URL}>How it works and how it was measured</a>
@@ -401,11 +401,16 @@ function TopicRow({
       {judged && a.quotes.length > 0 && (
         <ul className="quotes" aria-label={`What reviews say about ${label.toLowerCase()}`}>
           {a.quotes.map((q) => (
-            <li key={q.text} className={q.sentiment}>
-              <Thumb
-                up={q.sentiment === "positive"}
-                label={q.sentiment === "positive" ? "From a positive review" : "From a negative review"}
-              />
+            // The reviewer's thumb, as in the review list; none for a quote stored without it.
+            <li key={q.text} className={q.voted_up == null ? undefined : q.voted_up ? "up" : "down"}>
+              {q.voted_up == null ? (
+                <span />
+              ) : (
+                <Thumb
+                  up={q.voted_up}
+                  label={q.voted_up ? "The reviewer recommends it" : "The reviewer doesn't recommend it"}
+                />
+              )}
               <blockquote>&ldquo;{quoteText(q.text)}&rdquo;</blockquote>
             </li>
           ))}

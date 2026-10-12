@@ -594,24 +594,32 @@ async def test_aspect_quotes_prefer_the_weak_side(client, engine, seeded, ml_cal
     async with engine.connect() as conn:
         assert await conn.scalar(select(Game.aspect_quotes)) == quotes
     # Units under QUOTE_MIN_CHARS ("It crashes a lot", "Price is great") never qualify.
+    # The thumb is the reviewer's own (add_review's are all up), not the model's reading.
     assert quotes["bugs"] == [{
-        "text": "Crash after crash after crash, every single session", "sentiment": "negative"
+        "text": "Crash after crash after crash, every single session", "sentiment": "negative",
+        "voted_up": True,
     }]
     # The last sentence is in a negative review but reads positive, so it is no example.
     assert quotes["price"] == [{
-        "text": "Bad price, way too high for what you get here", "sentiment": "negative"
+        "text": "Bad price, way too high for what you get here", "sentiment": "negative",
+        "voted_up": True,
     }]
     assert quotes["story"] == []
 
 
 def test_pick_quotes_fills_from_the_other_side_and_drops_duplicates():
-    many = {"negative": ["Bad A", "bad a", "Bad B", "Bad C", "Bad D"], "positive": ["Good"]}
+    def side(*texts: str) -> list[tuple[str, bool]]:
+        return [(t, False) for t in texts]
+
+    many = {"negative": side("Bad A", "bad a", "Bad B", "Bad C", "Bad D"), "positive": side("Good")}
     assert [q["text"] for q in service._pick_quotes(many, "negative")] == ["Bad A", "Bad B", "Bad C"]
-    two = {"negative": ["Bad A", "Bad B"], "positive": ["Good"]}
+    two = {"negative": side("Bad A", "Bad B"), "positive": side("Good")}
     assert [q["text"] for q in service._pick_quotes(two, "negative")] == ["Bad A", "Bad B"]
-    one = {"negative": ["Bad A"], "positive": ["Good A", "Good B", "Good C"]}
-    assert [(q["text"], q["sentiment"]) for q in service._pick_quotes(one, "negative")] == [
-        ("Bad A", "negative"), ("Good A", "positive"), ("Good B", "positive")
+    one = {"negative": [("Bad A", True)], "positive": side("Good A", "Good B", "Good C")}
+    assert service._pick_quotes(one, "negative") == [
+        {"text": "Bad A", "sentiment": "negative", "voted_up": True},
+        {"text": "Good A", "sentiment": "positive", "voted_up": False},
+        {"text": "Good B", "sentiment": "positive", "voted_up": False},
     ]
 
 

@@ -9,7 +9,8 @@ export type SentimentCounts = {
   positive_pct: number | null;
 };
 
-export type Quote = { text: string; sentiment: Sentiment };
+// `voted_up` is the reviewer's thumb on Steam; null or absent for quotes stored before it.
+export type Quote = { text: string; sentiment: Sentiment; voted_up?: boolean | null };
 
 export type AspectCounts = SentimentCounts & { aspect: string };
 
