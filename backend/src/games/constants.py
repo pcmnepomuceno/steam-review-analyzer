@@ -12,4 +12,4 @@ class AspectStatus(StrEnum):
     PENDING = "pending"  # not analyzed yet; the next /aspects request starts it
     PROCESSING = "processing"  # claimed by a worker
     DONE = "done"
-    FAILED = "failed"  # reason in `games.aspects_error`; only `process_reviews.py --force` retries
+    FAILED = "failed"  # reason in `games.aspects_error`; retried by `--force` or a user-asked POST /retry

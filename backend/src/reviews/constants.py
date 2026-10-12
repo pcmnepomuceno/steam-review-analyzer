@@ -57,3 +57,9 @@ INTERRUPTED_ERROR = (
     "interrupted: the process running it stopped mid-run (out of memory, Ctrl-C, redeploy "
     "or shutdown)"
 )
+
+# games.aspects_error ("<ExceptionType>: <message>") starts with this when Python itself ran out
+# of memory. It is the only stored reason that says so: a process killed by the OS or the
+# container runtime (the usual out-of-memory case) leaves INTERRUPTED_ERROR, the same as a
+# Ctrl-C, a `docker stop` or a redeploy.
+MEMORY_ERROR_PREFIX = "MemoryError"

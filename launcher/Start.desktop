@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Steam Review Analyzer
+Comment=Start the app and open it in the browser
+Exec=bash -c "exec \\"\\${0%/*}/start.sh\\"" %k
+Terminal=true

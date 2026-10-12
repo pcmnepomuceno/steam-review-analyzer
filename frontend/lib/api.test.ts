@@ -53,12 +53,21 @@ describe("fetchState", () => {
 
   it("tells a failed analysis apart from other 500s", async () => {
     stubFetch(
-      json(500, { status: "failed", detail: "run --force" }),
-      json(500, { status: "failed", detail: "generic" }),
+      json(500, { status: "failed", detail: "run --force", retryable: false, out_of_memory: false }),
+      json(500, { status: "failed", detail: "generic", retryable: true, out_of_memory: true }),
+      json(500, { status: "failed", detail: "from an older API" }),
       json(500, "oops"),
     );
-    expect(await fetchState("/x")).toEqual({ kind: "failed", message: "run --force" });
-    expect(await fetchState("/x")).toEqual({ kind: "failed", message: "generic" });
+    expect(await fetchState("/x")).toEqual({
+      kind: "failed", message: "run --force", retryable: false, outOfMemory: false,
+    });
+    expect(await fetchState("/x")).toEqual({
+      kind: "failed", message: "generic", retryable: true, outOfMemory: true,
+    });
+    // No flags (an API older than the retry button): no button, no memory claim.
+    expect(await fetchState("/x")).toMatchObject({
+      kind: "failed", retryable: false, outOfMemory: false,
+    });
     expect(await fetchState("/x")).toMatchObject({ kind: "error", status: 500 });
   });
 

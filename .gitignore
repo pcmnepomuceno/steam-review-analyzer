@@ -39,3 +39,6 @@ docs/m8/screenshots/
 docs/m8/reference/
 frontend/AGENTS.md
 frontend/CLAUDE.md
+
+# Dev servers started by setup.sh
+.dev/

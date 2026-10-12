@@ -87,9 +87,12 @@ export const headerImage = (appid: number) =>
 export type Loaded<T> =
   | { kind: "ready"; data: T }
   | { kind: "processing" } // 202: analysis running
-  // 500 status "failed": needs a --force rerun by the owner. `message` names the reason for an
-  // interrupted run, else it is a generic line.
-  | { kind: "failed"; message: string }
+  // 500 status "failed". `message` names the reason for an interrupted run, else it is a
+  // generic line. `retryable`: this API analyzes on request, so the user can ask for a rerun
+  // (POST /games/{appid}/retry); otherwise only the owner's --force can. `outOfMemory`: the
+  // stored error is Python's own MemoryError. An interrupted run is not flagged, since an
+  // OS/Docker out-of-memory kill leaves the same reason as Ctrl-C or `docker stop`.
+  | { kind: "failed"; message: string; retryable: boolean; outOfMemory: boolean }
   | { kind: "not_found"; message: string } // 404: Steam has no such app
   // 403 status "unavailable": this deployment only serves games processed ahead of time
   | { kind: "unavailable"; message: string; games: AvailableGame[] }
@@ -118,7 +121,12 @@ export async function fetchState<T>(path: string, signal?: AbortSignal): Promise
     return { kind: "unavailable", message, games };
   }
   if (res.status === 500 && body?.status === "failed") {
-    return { kind: "failed", message };
+    return {
+      kind: "failed",
+      message,
+      retryable: body.retryable === true,
+      outOfMemory: body.out_of_memory === true,
+    };
   }
   return { kind: "error", status: res.status, message };
 }

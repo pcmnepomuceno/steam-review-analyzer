@@ -72,11 +72,19 @@ class ProcessingStatus(BaseModel):
 
 
 class FailedStatus(BaseModel):
-    """500 once the analysis has failed; it stays failed until a --force rerun."""
+    """500 once the analysis has failed; it stays failed until a retry is asked for.
+
+    A GET never retries (a run that kills the host would crash again on every poll). Where
+    `retryable` is true, a user's POST /games/{appid}/retry does; otherwise only a --force rerun.
+    """
 
     appid: int
     status: Literal["failed"]
     detail: str  # the reason and retry command for an interrupted run, else a generic line
+    retryable: bool  # on-demand processing is on: the dashboard can offer "Try again"
+    # The stored error says Python ran out of memory. False for everything else, including an
+    # interrupted run, which can't be told apart from an OS or Docker out-of-memory kill.
+    out_of_memory: bool
 
 
 class AvailableGame(BaseModel):
@@ -121,6 +129,6 @@ UNPROCESSED_RESPONSES = {
         "model": UnavailableStatus,
         "description": "On-demand processing is off and this app isn't pre-processed",
     },
-    500: {"model": FailedStatus, "description": "Analysis failed; needs a --force rerun"},
+    500: {"model": FailedStatus, "description": "Analysis failed; POST /retry or --force reruns it"},
     503: {"description": "No sentiment model trained yet"},
 }
