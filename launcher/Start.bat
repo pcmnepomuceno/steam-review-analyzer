@@ -1,6 +1,7 @@
 @echo off
 rem Windows: double-click. Builds and starts the whole app in Docker, then opens the dashboard.
-cd /d "%~dp0.."
+rem pushd, not cd: it also works when the folder is on a network or WSL (\\wsl.localhost\...) path.
+pushd "%~dp0.."
 docker info >nul 2>&1
 if errorlevel 1 (
   echo Docker is not installed or not running.

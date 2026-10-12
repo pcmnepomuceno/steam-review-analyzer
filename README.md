@@ -95,7 +95,7 @@ The only thing to install is [Docker Desktop](https://www.docker.com/products/do
 |---|---|---|
 | Linux | `launcher/start.sh` in a terminal | Tested: stack starts, opens, analyzes a new game |
 | Linux | `launcher/Start.desktop` (double-click) | Built, **not tested** (no desktop session was available) |
-| Windows | `launcher/Start.bat` | Built, **not tested** |
+| Windows | `launcher/Start.bat`, `Stop.bat` | Partly tested: run through `cmd.exe` with Docker Desktop from a repo on a WSL path, the stack started and `Stop.bat` stopped it. **Not tested** by double-clicking in Explorer, from a ZIP on a normal Windows drive, or past SmartScreen |
 | macOS | `launcher/Start.command` | Built, **not tested** |
 
 If a launcher fails on Windows or macOS, that is a known gap, not something you did wrong. Every platform has the same fallback, which only needs Docker Desktop and a terminal opened in the project folder: run `docker compose up -d --build --wait`, then open http://localhost:3000.
