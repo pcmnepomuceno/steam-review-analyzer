@@ -13,6 +13,7 @@ from starlette.responses import JSONResponse
 from src.config import settings
 from src.games import service as games_service
 from src.games.constants import AspectStatus
+from src.games.exceptions import NotFailed, RetryNotAllowed
 from src.games.models import Game
 from src.games.schemas import (
     AvailableGame,
@@ -191,7 +192,7 @@ async def process_reviews(
     processing), read the
     texts, then write every result together with status -> done. A failure sets status ->
     failed with the error and re-raises; callers log it. A failed game stays failed until a
-    `force` run.
+    `force` run or a user's `retry_failed` request, never on its own.
     """
     async with session.bind.connect() as owner:
         # Neon ends sessions idle in a transaction after 5 min; a run on Render takes longer.
@@ -409,6 +410,8 @@ async def unprocessed_response(session: AsyncSession, game: Game) -> JSONRespons
             appid=appid,
             status="failed",
             detail=_failure_detail(game),
+            retryable=settings.allow_on_demand_processing,
+            out_of_memory=(game.aspects_error or "").startswith(constants.MEMORY_ERROR_PREFIX),
         )
         return JSONResponse(status_code=500, content=body.model_dump())
     task = None
@@ -421,6 +424,30 @@ async def unprocessed_response(session: AsyncSession, game: Game) -> JSONRespons
         detail=f"Reviews for app {appid} are being analyzed; retry shortly",
     )
     return JSONResponse(status_code=202, content=body.model_dump(), background=task)
+
+
+async def retry_failed(session: AsyncSession, game: Game) -> JSONResponse:
+    """A user's request to rerun a failed analysis (the dashboard's "Try again" button).
+
+    Moves failed -> pending, then answers like a GET on a pending game (202, run queued).
+    Failed games are never retried by a GET, so a run that kills the host isn't repeated on
+    every poll; this runs only on an explicit POST, one run per click. Refused where
+    on-demand processing is off (the deployed demo): there a visitor could otherwise start
+    14-19 min runs on the host's CPU. A game that is already pending or processing just
+    answers its 202, so a double click starts nothing twice.
+    """
+    if not settings.allow_on_demand_processing:
+        raise RetryNotAllowed
+    if game.aspects_status == AspectStatus.DONE:
+        raise NotFailed(game.appid)
+    await session.execute(
+        update(Game)
+        .where(Game.appid == game.appid, Game.aspects_status == AspectStatus.FAILED)
+        .values(aspects_status=AspectStatus.PENDING, aspects_error=None)
+    )
+    await session.commit()
+    await session.refresh(game)
+    return await unprocessed_response(session, game)
 
 
 async def aspect_summary(session: AsyncSession, game: Game) -> dict[str, Any]:

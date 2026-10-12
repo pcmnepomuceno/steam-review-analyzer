@@ -10,6 +10,7 @@ from src.database import get_session
 from src.games import service
 from src.games.constants import AspectStatus
 from src.games.dependencies import valid_appid
+from src.games.exceptions import GameNotFound
 from src.games.models import Game
 from src.games.schemas import (
     UNPROCESSED_RESPONSES,
@@ -59,6 +60,18 @@ async def get_aspects(
             ),
         )
     return AspectSummary(name=game.name, steam_rating=rating, **summary)
+
+
+@router.post("/{appid}/retry", responses=UNPROCESSED_RESPONSES)
+async def retry_analysis(
+    appid: Annotated[int, Depends(valid_appid)],
+    session: Annotated[AsyncSession, Depends(get_session, scope="function")],
+) -> JSONResponse:
+    """Rerun a failed analysis on the user's request (see `reviews_service.retry_failed`)."""
+    game = await service.get_game(session, appid)
+    if game is None or not service.is_ingested(game):
+        raise GameNotFound(appid)
+    return await reviews_service.retry_failed(session, game)
 
 
 @steam_router.get("/search", response_model=list[SearchResult])

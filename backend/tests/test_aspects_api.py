@@ -12,6 +12,7 @@ import pytest
 from sqlalchemy import func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.config import settings
 from src.games.constants import AspectStatus
 from src.games.models import Game
 from src.ml import aspects, sentiment
@@ -702,3 +703,72 @@ async def test_game_processed_before_stored_quotes_is_served_without_them(
     assert all(a["quotes"] == [] for a in resp.json()["aspects"])
     assert resp.json()["steam_rating"] is None
     assert f"process_reviews.py --force {APPID}" in caplog.text
+
+
+async def test_failed_answer_says_whether_a_retry_is_offered(client, engine, seeded, monkeypatch):
+    await set_status(engine, AspectStatus.FAILED)
+    assert (await client.get(f"/games/{APPID}/aspects")).json()["retryable"] is True
+    monkeypatch.setattr(settings, "allow_on_demand_processing", False)
+    assert (await client.get(f"/games/{APPID}/aspects")).json()["retryable"] is False
+
+
+async def test_retry_reruns_a_failed_game_only_when_asked(client, engine, seeded, ml_calls):
+    await set_status(engine, AspectStatus.FAILED)
+    # Polling a failed game never restarts it.
+    for _ in range(2):
+        assert (await client.get(f"/games/{APPID}/aspects")).status_code == 500
+    assert ml_calls == []
+    # One click does: pending, then the background run finishes it.
+    resp = await client.post(f"/games/{APPID}/retry")
+    assert resp.status_code == 202
+    assert resp.json()["status"] == "processing"
+    assert (await game_status(engine)) == (AspectStatus.DONE, None)
+    assert (await client.get(f"/games/{APPID}/aspects")).status_code == 200
+
+
+async def test_retry_that_fails_again_is_failed_again_not_looped(
+    client, engine, seeded, ml_calls, monkeypatch
+):
+    def boom(review_text: str) -> dict:
+        raise RuntimeError("model exploded")
+
+    monkeypatch.setattr(sentiment, "predict", boom)
+    await set_status(engine, AspectStatus.FAILED)
+    assert (await client.post(f"/games/{APPID}/retry")).status_code == 202
+    assert (await game_status(engine))[0] == AspectStatus.FAILED
+    assert (await client.get(f"/games/{APPID}/aspects")).status_code == 500  # stays failed
+
+
+async def test_retry_is_refused_where_on_demand_is_off(client, engine, seeded, ml_calls, monkeypatch):
+    monkeypatch.setattr(settings, "allow_on_demand_processing", False)
+    await set_status(engine, AspectStatus.FAILED)
+    assert (await client.post(f"/games/{APPID}/retry")).status_code == 403
+    assert (await game_status(engine))[0] == AspectStatus.FAILED
+    assert ml_calls == []
+
+
+async def test_retry_of_a_game_that_is_not_failed(client, engine, seeded, ml_calls):
+    await set_status(engine, AspectStatus.DONE)
+    assert (await client.post(f"/games/{APPID}/retry")).status_code == 409
+    assert (await client.post("/games/999/retry")).status_code == 404  # unknown game
+    assert ml_calls == []
+
+
+@pytest.mark.parametrize(
+    ("stored", "out_of_memory"),
+    [
+        ("MemoryError: ", True),
+        # An OS or Docker OOM kill leaves this, same as Ctrl-C or `docker stop`: not labelled.
+        (constants.INTERRUPTED_ERROR, False),
+        ("RuntimeError: model exploded", False),
+        (None, False),
+    ],
+)
+async def test_failed_answer_flags_only_a_stored_memory_error(
+    client, engine, seeded, stored, out_of_memory
+):
+    async with engine.begin() as conn:
+        await conn.execute(
+            update(Game).values(aspects_status=AspectStatus.FAILED, aspects_error=stored)
+        )
+    assert (await client.get(f"/games/{APPID}/aspects")).json()["out_of_memory"] is out_of_memory

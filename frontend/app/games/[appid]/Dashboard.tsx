@@ -61,6 +61,17 @@ export default function Dashboard({ appid }: { appid: number }) {
     setAttempt((n) => n + 1);
   };
 
+  // Ask the API to rerun a failed analysis, then wait for it like for a new game.
+  const restart = async () => {
+    const res = await fetch(`/api/games/${appid}/retry`, { method: "POST" }).catch(() => null);
+    if (res?.ok) return retry();
+    setState({
+      kind: "error",
+      status: res?.status ?? null,
+      message: "Could not restart the analysis. Try again in a moment.",
+    });
+  };
+
   switch (state.kind) {
     case "loading":
       return (
@@ -90,12 +101,40 @@ export default function Dashboard({ appid }: { appid: number }) {
     case "failed":
       return (
         <Status title="Analysis failed" error>
-          {/* No retry button: a failed game stays failed until the owner reruns it with
-              --force, which no visitor can do. */}
-          <p>{state.message}</p>
-          <p>
-            <Link href="/">Pick another game</Link>
-          </p>
+          {state.retryable ? (
+            <>
+              {/* A GET never restarts a failed game (a run that kills the host would crash
+                  again on every poll); this click does, once. Offered only where the API
+                  analyzes on request, i.e. the local app, not the deployed demo. The memory
+                  advice shows only for a stored MemoryError: an OOM kill leaves the same
+                  reason as a stopped container, so it appears as the generic failure, which
+                  links the same README section for that reason. */}
+              {state.outOfMemory ? (
+                <p>
+                  The analysis ran out of memory. If you run this app with Docker, give it more
+                  (see <a href={MEMORY_URL}>how much it needs</a>), then try again.
+                </p>
+              ) : (
+                <p>
+                  Something went wrong — try again. If it keeps happening, see{" "}
+                  <a href={MEMORY_URL}>what to check</a>.
+                </p>
+              )}
+              <p>
+                <button onClick={restart}>Try again</button> or{" "}
+                <Link href="/">pick another game</Link>
+              </p>
+            </>
+          ) : (
+            <>
+              {/* The deployed demo: a failed game stays failed until the owner reruns it with
+                  --force, which no visitor can do. */}
+              <p>{state.message}</p>
+              <p>
+                <Link href="/">Pick another game</Link>
+              </p>
+            </>
+          )}
         </Status>
       );
     case "not_found":
@@ -366,6 +405,8 @@ function Headline({
 }
 
 const METHOD_URL = "https://github.com/pmNepomuceno/steam-review-analyzer#readme";
+const MEMORY_URL =
+  "https://github.com/pmNepomuceno/steam-review-analyzer#if-the-analysis-fails-docker-memory";
 
 function TopicRow({
   appid,
