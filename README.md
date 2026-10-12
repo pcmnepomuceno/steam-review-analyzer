@@ -85,7 +85,48 @@ The same test shows that the on-demand pipeline works in the production image. B
 
 ## Run it locally
 
-Requires Git, Docker (running), [uv](https://docs.astral.sh/uv/) and Node 22+, on Linux, macOS or WSL (the script is bash). A trained sentiment model is committed (`backend/models_store/sentiment.joblib`), so no training is needed to start.
+### Just use it (no coding tools needed)
+
+The only thing to install is [Docker Desktop](https://www.docker.com/products/docker-desktop/). Open it once and wait until it says it is running.
+
+**What has been tested.** The app itself (Docker Compose stack, on-demand analysis, memory and build figures below) was tested on Linux (Ubuntu on WSL2). The double-click launchers were not all tested:
+
+| Platform | Launcher | Status |
+|---|---|---|
+| Linux | `launcher/start.sh` in a terminal | Tested: stack starts, opens, analyzes a new game |
+| Linux | `launcher/Start.desktop` (double-click) | Built, **not tested** (no desktop session was available) |
+| Windows | `launcher/Start.bat` | Built, **not tested** |
+| macOS | `launcher/Start.command` | Built, **not tested** |
+
+If a launcher fails on Windows or macOS, that is a known gap, not something you did wrong. Every platform has the same fallback, which only needs Docker Desktop and a terminal opened in the project folder: run `docker compose up -d --build --wait`, then open http://localhost:3000.
+
+1. Download this repo (green **Code** button on GitHub, then **Download ZIP**, then unzip it) or `git clone` it.
+2. Open the `launcher` folder and double-click `Start.bat` (Windows), `Start.command` (macOS) or `Start.desktop` (Linux; first time: right-click, **Allow Launching**, and on some desktops mark it as trusted; or run `launcher/start.sh` in a terminal).
+3. Wait for the first start. It builds the app, then your browser opens on http://localhost:3000. Later starts take seconds.
+4. Search for any Steam game, or paste its appid (the number in its store URL), and open it. The app fetches its reviews from Steam and analyzes them while you watch. This is the full app, not the restricted demo (see above). The page shows progress and updates itself.
+
+Games you have analyzed are kept in a Docker volume and are still there next time. To stop the app, double-click `Stop.bat` / `Stop.command` (or `launcher/stop.sh`), or press stop in Docker Desktop. Nothing runs when it is stopped.
+
+**macOS blocks the launcher the first time.** A ZIP downloaded in a browser marks every file in it as from the internet, and macOS (Gatekeeper) refuses to run an unsigned script: "Start.command cannot be opened because it is from an unidentified developer" or "Apple could not verify...". There is no way around this without Terminal other than these steps (signing the launcher needs a paid Apple developer account, which this project doesn't have):
+- macOS 15 (Sequoia) and later: double-click `Start.command` once and dismiss the warning. Open **System Settings > Privacy & Security**, scroll to **Security**, click **Open Anyway** next to the message about `Start.command`, and enter your password. Double-click it again and choose **Open**. Right-click > Open no longer works on these versions.
+- macOS 14 and earlier: right-click `Start.command`, choose **Open**, then **Open** in the dialog. If that fails, use the Settings steps above.
+- Avoiding it: a repo fetched with `git clone` or GitHub Desktop (not the ZIP) has no "from the internet" mark, so no warning appears. A ZIP can also lose the file's "run" permission ("you do not have permission to open it"); cloning avoids that too.
+
+**Windows may show "Windows protected your PC"** (SmartScreen) for `Start.bat` from a ZIP: click **More info**, then **Run anyway**. Or right-click the ZIP > Properties > **Unblock** before unzipping.
+
+**First start: time and disk.** Measured from a clean state on a 32-core Linux desktop with a fast connection: removing this project's volumes and images and building with no layer cache took **159 s**, and starting the three containers **21 s** (**3 min** in all). Docker's base images `python:3.12-slim` and `postgres:16` were already on that machine and are not in the figure (`node:22-slim` was downloaded during the build). Expect longer on a slower connection or CPU; I haven't measured one. It uses about **3.1 GB** for the images (dashboard 1.4 GB, API 1.0 GB, Postgres 0.6 GB) plus about **1.9 GB** of Docker build cache, which `docker builder prune` frees, and the database volume (about 100 MB with seven games analyzed).
+
+#### If the analysis fails: Docker memory
+
+The stack's three containers peaked at about **510 MB together** while analyzing Starfield, the largest of the sample games (9,005 sentence units), with the dashboard being loaded: the API/analysis container 350 MB, the dashboard 97 MB, Postgres 61 MB. The API container is the one that decides it. I lowered its memory limit step by step and ran a real analysis each time (in a container limited to 4 CPUs): **352 MB finishes, 345 MB is killed by the out-of-memory killer** partway through (repeated; 340, 335, 330 and 300 MB were killed too). So the analysis needs at least ~350 MB in the container. What I did *not* measure is the extra memory Docker Desktop's own virtual machine uses on Windows and macOS, so 2 GB for Docker Desktop (Settings > Resources > Memory) is my recommendation with that margin, not a measured floor. If the API container is killed, Docker restarts it and the game that was being analyzed shows "Analysis failed — Something went wrong — try again" with a **Try again** button (it never restarts by itself, so a game that keeps running out of memory can't loop). The screen can't say "out of memory" here: a killed process leaves the same stored reason as closing the app or restarting Docker mid-analysis, so the app doesn't guess. If it keeps happening on a game, raise the memory limit as below. Raise Docker Desktop's memory first, then click it. The button exists only in the local app: the deployed demo has it off.
+
+**Speed.** The analysis uses the CPU cores Docker Desktop is given (up to 8). Starfield took 52-57 s from request to done, with 4 CPUs or unlimited. Smaller games are quicker, and a slower laptop will take longer.
+
+If a port is taken ("port is already allocated" for 3000, 8000 or 5433), close the program using it (often another local web server or Postgres) and start again. To update after pulling a new version, just start it again: it rebuilds what changed.
+
+### Developer setup
+
+Requires Git, Docker (running), [uv](https://docs.astral.sh/uv/) and Node 22+, on Linux, macOS or WSL (the script is bash). This runs the API and dashboard on the host with hot reload instead of in containers. A trained sentiment model is committed (`backend/models_store/sentiment.joblib`), so no training is needed to start. Don't run it together with the launcher: both use ports 3000 and 8000.
 
 ```bash
 git clone https://github.com/pmNepomuceno/steam-review-analyzer.git
