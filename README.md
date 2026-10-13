@@ -190,9 +190,9 @@ The sentiment model trains on cached reviews, and only the running API caches th
 
 1. **Ingest.** With the API running (no model needed yet), request a few games' reviews, e.g. `curl "localhost:8000/games/1145360/reviews?limit=1"`. Include games with mixed ratings so the model sees enough negative reviews. The first model used Portal 2, Hades, Starfield, Cities: Skylines II and PAYDAY 3 (appids 620, 1145360, 1716740, 949230, 1272080).
 2. **Train.** `python scripts/train_sentiment.py` writes `models_store/sentiment.joblib` and `docs/eval/sentiment_report.txt`.
+3. **Serve.** `/aspects` and filtered `/reviews` now work. Until a model exists they answer 503. The API loads the model on first use, so no restart is needed for the first one. After a *re*train, restart the API and run `python scripts/process_reviews.py --force` to redo stored results.
 
 The shipped model was not trained this way. It came from `scripts/compare_sentiment.py --adopt`, run on a local training database holding those 5 games plus 28 more, ingested with `scripts/ingest_game.py` and `DATABASE_URL` pointing at that database. Steam only serves recent reviews, so that corpus can't be re-fetched as it was. The script's docstring has the details, and `docs/DECISIONS.md` (2026-10-13) lists the games.
-3. **Serve.** `/aspects` and filtered `/reviews` now work. Until a model exists they answer 503. The API loads the model on first use, so no restart is needed for the first one. After a *re*train, restart the API and run `python scripts/process_reviews.py --force` to redo stored results.
 
 After changing anchors or the threshold, rerun `python scripts/evaluate_aspects.py` (writes `docs/eval/aspect_report.txt`) and `python scripts/process_reviews.py --force`.
 
