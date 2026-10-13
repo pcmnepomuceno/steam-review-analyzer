@@ -44,6 +44,7 @@ class Review:
     game: str
     text: str
     voted_up: bool
+    appid: int = 0
 
 
 async def load_reviews() -> list[Review]:
@@ -57,13 +58,13 @@ async def load_reviews() -> list[Review]:
 
     async with SessionLocal() as session:
         rows = await session.execute(
-            select(Game.name, ReviewRow.review_text, ReviewRow.voted_up)
+            select(Game.name, ReviewRow.review_text, ReviewRow.voted_up, ReviewRow.appid)
             .join(Game, Game.appid == ReviewRow.appid)
             .where(ReviewRow.language == STEAM_LANGUAGE)
             .where(func.trim(ReviewRow.review_text) != "")
             .order_by(ReviewRow.id)
         )
-        reviews = [Review(name, text, voted_up) for name, text, voted_up in rows]
+        reviews = [Review(*row) for row in rows]
     await engine.dispose()
     return reviews
 

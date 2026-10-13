@@ -13,10 +13,12 @@ node_modules/
 .env.local
 
 # Trained models. sentiment.joblib is committed so the deployed model is the evaluated one
-# (docs/eval/sentiment_report.txt); retrain with scripts/train_sentiment.py.
+# (docs/eval/sentiment_report.txt); it is rebuilt by scripts/compare_sentiment.py --adopt.
+# sentiment_m2.joblib is the M2 model that script and the M10 checks compare against.
 backend/models_store/*
 !backend/models_store/.gitkeep
 !backend/models_store/sentiment.joblib
+!backend/models_store/sentiment_m2.joblib
 
 # OS
 .DS_Store

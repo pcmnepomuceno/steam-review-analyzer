@@ -1,9 +1,10 @@
 """Inference for the TF-IDF + logistic regression sentiment model.
 
-The artifact is produced offline by `backend/scripts/train_sentiment.py`; nothing here
-trains. It is loaded on first use and cached. Loading is lazy so the module (and the API)
-works without a trained artifact: training needs reviews that only the running API
-ingests, so on a fresh setup the API has to serve before a model exists.
+The artifact is produced offline (the shipped one by `backend/scripts/compare_sentiment.py
+--adopt`, a from-scratch one by `train_sentiment.py`); nothing here trains. It is loaded
+on first use and cached. Loading is lazy so the module (and the API) works without a
+trained artifact: training needs reviews that only the running API ingests, so on a fresh
+setup the API has to serve before a model exists.
 """
 
 from pathlib import Path
