@@ -53,7 +53,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <footer className="site-footer">
           <div>
             <span>
-              Built by
+              Built by{" "}
               <a href="https://github.com/pcmnepomuceno" target="_blank" rel="noopener noreferrer">
                 pcmnepomuceno
               </a>
