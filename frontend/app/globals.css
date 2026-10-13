@@ -234,6 +234,35 @@ main {
     calc(64px + env(safe-area-inset-bottom, 0px)) calc(16px + env(safe-area-inset-left, 0px));
 }
 
+.site-footer {
+  border-top: 1px solid var(--border);
+  padding: 0 calc(16px + env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px)
+    calc(16px + env(safe-area-inset-left, 0px));
+  color: var(--text-2);
+  font-size: 0.875rem;
+}
+
+.site-footer > div {
+  max-width: 1040px;
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  column-gap: 24px;
+}
+
+.site-footer span,
+.site-footer a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+.site-footer span {
+  gap: 0.3em;
+}
+
 main section,
 .panel + .panel {
   margin-top: 40px;
