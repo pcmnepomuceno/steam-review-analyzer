@@ -50,6 +50,23 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           </div>
         </header>
         <main>{children}</main>
+        <footer className="site-footer">
+          <div>
+            <span>
+              Built by{" "}
+              <a href="https://github.com/pcmnepomuceno" target="_blank" rel="noopener noreferrer">
+                pcmnepomuceno
+              </a>
+            </span>
+            <a
+              href="https://github.com/pcmnepomuceno/steam-review-analyzer"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              View source on GitHub
+            </a>
+          </div>
+        </footer>
       </body>
     </html>
   );
