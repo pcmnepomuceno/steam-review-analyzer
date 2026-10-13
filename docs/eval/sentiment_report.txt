@@ -1,35 +1,127 @@
-Sentiment model report, generated 2026-09-24 11:38 UTC by backend/scripts/train_sentiment.py
+Sentiment model report (M10: 33-game corpus, compared with the M2 model), generated 2026-10-13 05:38 UTC by backend/scripts/compare_sentiment.py
 
 === Dataset ===
-  Cities: Skylines II            1000 reviews   65.6% positive
-  Hades                          1000 reviews   97.0% positive  <- one-sided
-  PAYDAY 3                       1000 reviews   71.4% positive
-  Portal 2                       1000 reviews   98.3% positive  <- one-sided
-  Starfield                      1000 reviews   58.0% positive
+  * Cities: Skylines II               1000 reviews   65.6% positive
+  * Hades                             1000 reviews   97.0% positive  <- one-sided
+  * PAYDAY 3                          1000 reviews   71.4% positive
+  * Portal 2                          1000 reviews   98.3% positive  <- one-sided
+  * Starfield                         1000 reviews   58.0% positive
+    ARK: Survival Ascended            1000 reviews   60.6% positive
+    Apex Legends™                     1000 reviews   66.4% positive
+    Balatro                           1000 reviews   96.9% positive  <- one-sided
+    Baldur's Gate 3                   1000 reviews   94.4% positive
+    Counter-Strike 2                  1000 reviews   80.8% positive
+    Dead by Daylight                  1000 reviews   72.5% positive
+    Diablo® IV                        1000 reviews   66.9% positive
+    Disco Elysium - The Final Cut     1000 reviews   90.8% positive
+    ELDEN RING                        1000 reviews   92.9% positive
+    Euro Truck Simulator 2            1000 reviews   96.8% positive  <- one-sided
+    Football Manager 2024             1000 reviews   94.9% positive
+    Forza Motorsport                  1000 reviews   61.0% positive
+    Hearts of Iron IV                 1000 reviews   86.2% positive
+    Kerbal Space Program 2            1000 reviews   23.0% positive
+    Marvel Rivals                     1000 reviews   54.2% positive
+    Microsoft Flight Simulator 2024   1000 reviews   79.3% positive
+    Monster Hunter Wilds              1000 reviews   83.2% positive
+    NBA 2K25                          1000 reviews   69.4% positive
+    New World: Aeternum               1000 reviews   16.2% positive
+    PUBG: BATTLEGROUNDS               1000 reviews   73.7% positive
+    Sid Meier's Civilization VII      1000 reviews   46.3% positive
+    Skull and Bones                   1000 reviews   66.1% positive
+    Stardew Valley                    1000 reviews   98.1% positive  <- one-sided
+    Street Fighter™ 6                 1000 reviews   66.2% positive
+    Suicide Squad: Kill the Justice   1000 reviews   52.2% positive
+    The Lord of the Rings: Gollum™     689 reviews   39.9% positive
+    The Sims™ 4                       1000 reviews   79.2% positive
+    War Thunder                       1000 reviews   76.1% positive
+  (* = original M2 games)
   Excluded empty/whitespace-only reviews: 0
-  Train: 4000 (3122 positive / 878 negative)
-  Test: 1000 (781 positive / 219 negative)
+  Original corpus: 5000 reviews, 78.1% positive
+  Expanded corpus: 32689 reviews from 33 games, 72.3% positive
+  New model train: 26151 (18896 positive / 7255 negative)
+  Expanded test: 6538 (4725 positive / 1813 negative)
+  M2 model reproduced on the original test set: accuracy 0.860, negative F1 0.718 (matches its stored metrics)
 
-=== Held-out test set: model vs. majority-class baseline ===
-  class      metric        model  baseline
-  negative   precision     0.643     0.000
-  negative   recall        0.813     0.000
-  negative   f1            0.718     0.000
-  negative   support         219       219
-  positive   precision     0.943     0.781
-  positive   recall        0.873     1.000
-  positive   f1            0.907     0.877
-  positive   support         781       781
-  overall    accuracy      0.860     0.781
-  overall    macro F1      0.812     0.439
+=== 4a expanded test (original + new games) ===
+  class      metric             M2        new   majority
+  negative   precision       0.714      0.731      0.000
+  negative   recall          0.742      0.836      0.000
+  negative   f1              0.727      0.780      0.000
+  negative   support          1813       1813       1813
+  positive   precision       0.899      0.933      0.723
+  positive   recall          0.886      0.882      1.000
+  positive   f1              0.893      0.907      0.839
+  positive   support          4725       4725       4725
+  overall    accuracy        0.846      0.869      0.723
+  overall    macro F1        0.810      0.843      0.420
+  negative F1 change, new - M2: +0.052, 95% bootstrap CI [+0.041, +0.065]: new BETTER (CI above 0)
 
-=== Per game (test set) ===
-  game                             n   pos%  base acc  model acc  model neg F1
-  Cities: Skylines II            213  63.8%     0.638      0.878         0.840
-  Hades                          196  98.0%     0.980      0.918         0.200
-  PAYDAY 3                       204  70.1%     0.701      0.760         0.642
-  Portal 2                       192  97.9%     0.979      0.958         0.429
-  Starfield                      195  62.6%     0.626      0.790         0.748
+=== 4b ORIGINAL test (the M2 model's 1000 rows) ===
+  class      metric             M2        new   majority
+  negative   precision       0.643      0.674      0.000
+  negative   recall          0.813      0.868      0.000
+  negative   f1              0.718      0.758      0.000
+  negative   support           219        219        219
+  positive   precision       0.943      0.960      0.781
+  positive   recall          0.873      0.882      1.000
+  positive   f1              0.907      0.919      0.877
+  positive   support           781        781        781
+  overall    accuracy        0.860      0.879      0.781
+  overall    macro F1        0.812      0.839      0.439
+  negative F1 change, new - M2: +0.041, 95% bootstrap CI [+0.008, +0.076]: new BETTER (CI above 0)
 
-WARNING: Hades, Portal 2 are >= 95% one class; a majority baseline looks deceptively strong on them (see per-game table).
-PASS: model negative-class (minority) F1 0.718 beats the majority baseline's 0.000.
+=== extra: new games only (unseen by the M2 model) ===
+  class      metric             M2        new   majority
+  negative   precision       0.726      0.740      0.000
+  negative   recall          0.732      0.832      0.000
+  negative   f1              0.729      0.783      0.000
+  negative   support          1594       1594       1594
+  positive   precision       0.891      0.928      0.712
+  positive   recall          0.888      0.882      1.000
+  positive   f1              0.890      0.904      0.832
+  positive   support          3944       3944       3944
+  overall    accuracy        0.843      0.867      0.712
+  overall    macro F1        0.809      0.844      0.416
+  negative F1 change, new - M2: +0.054, 95% bootstrap CI [+0.042, +0.067]: new BETTER (CI above 0)
+
+=== Per game, expanded test set ===
+  game                                  n   pos%   M2 acc  new acc  M2 neg F1  new neg F1
+  * Starfield                         195  62.6%    0.790    0.856      0.748       0.827
+  * Portal 2                          192  97.9%    0.958    0.927      0.429       0.300
+  * PAYDAY 3                          204  70.1%    0.760    0.804      0.642       0.710
+  * Hades                             196  98.0%    0.918    0.929      0.200       0.300
+  * Cities: Skylines II               213  63.8%    0.878    0.883      0.840       0.845
+    War Thunder                       207  80.2%    0.845    0.845      0.579       0.619
+    The Sims™ 4                       205  74.6%    0.859    0.898      0.713       0.792
+    The Lord of the Rings: Gollum™    137  46.0%    0.745    0.737      0.765       0.775
+    Suicide Squad: Kill the Justice   212  55.7%    0.811    0.797      0.770       0.775
+    Street Fighter™ 6                 194  64.9%    0.830    0.892      0.752       0.849
+    Stardew Valley                    198  98.5%    0.869    0.924      0.133       0.211
+    Skull and Bones                   175  61.1%    0.806    0.851      0.767       0.822
+    Sid Meier's Civilization VII      195  51.8%    0.841    0.821      0.839       0.833
+    PUBG: BATTLEGROUNDS               191  71.2%    0.832    0.874      0.673       0.782
+    New World: Aeternum               212  15.6%    0.835    0.887      0.899       0.933
+    NBA 2K25                          202  69.3%    0.876    0.896      0.775       0.835
+    Monster Hunter Wilds              200  78.0%    0.885    0.905      0.736       0.776
+    Microsoft Flight Simulator 2024   198  76.8%    0.889    0.909      0.780       0.816
+    Marvel Rivals                     178  52.2%    0.809    0.843      0.767       0.831
+    Kerbal Space Program 2            191  27.7%    0.785    0.906      0.839       0.935
+    Hearts of Iron IV                 202  86.6%    0.782    0.772      0.421       0.439
+    Forza Motorsport                  196  60.2%    0.806    0.842      0.768       0.814
+    Football Manager 2024             209  96.2%    0.885    0.952      0.368       0.583
+    Euro Truck Simulator 2            193  95.3%    0.907    0.912      0.308       0.320
+    ELDEN RING                        210  92.9%    0.867    0.890      0.364       0.465
+    Disco Elysium - The Final Cut     204  90.2%    0.828    0.838      0.386       0.377
+    Diablo® IV                        221  67.0%    0.937    0.910      0.904       0.873
+    Dead by Daylight                  190  72.6%    0.784    0.779      0.594       0.632
+    Counter-Strike 2                  209  81.3%    0.837    0.842      0.528       0.621
+    Baldur's Gate 3                   204  94.1%    0.902    0.907      0.375       0.387
+    Balatro                           198  96.5%    0.934    0.934      0.519       0.480
+    Apex Legends™                     211  65.4%    0.754    0.801      0.581       0.704
+    ARK: Survival Ascended            196  60.2%    0.821    0.872      0.768       0.848
+  Per-game negative F1 rests on few negatives for one-sided games; read it as a hint.
+
+=== Summary: negative F1 (the minority class), M2 -> new ===
+  4a expanded test           0.727 -> 0.780 (+0.052, CI [+0.041, +0.065]) new BETTER (CI above 0)
+  4b ORIGINAL test           0.718 -> 0.758 (+0.041, CI [+0.008, +0.076]) new BETTER (CI above 0)
+  extra: new games only      0.729 -> 0.783 (+0.054, CI [+0.042, +0.067]) new BETTER (CI above 0)

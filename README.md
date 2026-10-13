@@ -36,16 +36,22 @@ Stack: FastAPI, SQLAlchemy (async) + Alembic, Postgres, scikit-learn, ONNX Runti
 
 ### Sentiment classifier
 
-Held-out test set of 1000 reviews from 5 games, 78% positive (`docs/eval/sentiment_report.txt`). Steam reviews skew positive, so a model that always answers "positive" already gets 78% accuracy. The metric that matters is F1 on the minority (negative) class:
+Trained on 26,151 reviews from 33 games and tested on 6,538 held-out reviews from the same games, 72% positive (`docs/eval/sentiment_report.txt`). Steam reviews skew positive, so a model that always answers "positive" already gets 72% accuracy. The metric that matters is F1 on the minority (negative) class. The table compares the shipped model with the first one (M2), trained on 5 of those games:
 
-| | Model | Majority baseline |
-|---|---|---|
-| **Negative-class F1** | **0.718** | 0.000 |
-| Negative precision / recall | 0.643 / 0.813 | 0.000 / 0.000 |
-| Accuracy | 0.860 | 0.781 |
-| Macro F1 | 0.812 | 0.439 |
+| Test set | | Shipped model (33 games) | First model (5 games) | Majority baseline |
+|---|---|---|---|---|
+| All 33 games (6,538 reviews) | **Negative-class F1** | **0.780** | 0.727 | 0.000 |
+| | Negative precision / recall | 0.731 / 0.836 | 0.714 / 0.742 | 0.000 / 0.000 |
+| | Accuracy | 0.869 | 0.846 | 0.723 |
+| | Macro F1 | 0.843 | 0.810 | 0.420 |
+| First model's own test set (1,000 reviews, 5 games) | **Negative-class F1** | **0.758** | 0.718 | 0.000 |
+| | Negative precision / recall | 0.674 / 0.868 | 0.643 / 0.813 | 0.000 / 0.000 |
+| | Accuracy | 0.879 | 0.860 | 0.781 |
+| | Macro F1 | 0.839 | 0.812 | 0.439 |
 
-On the one-sided games it is weak. Hades and Portal 2 are ~98% positive, and the model's negative F1 there is 0.200 and 0.429. On both, its accuracy is *below* the always-positive baseline's (0.918 vs 0.980, 0.958 vs 0.979).
+The second half re-scores both models on the exact 1,000 reviews the first model was tested on, which the new model never trained on. That checks the gain isn't only on the new games. A paired bootstrap puts the negative-F1 gain at +0.052 (95% CI +0.041 to +0.065) on all games and +0.041 (+0.008 to +0.076) on the original test set: real on both, but thin on the second, which has only 219 negative reviews. The 28 extra games were picked for a spread of genres and of complaints (abandonment, monetization, performance, cheaters, balance). They exist only in a separate local training database, never in the app's own database or the demo.
+
+On the one-sided games it is weak. Hades and Portal 2 are ~98% positive, and the shipped model's negative F1 there is 0.300 on both. On both, its accuracy is *below* the always-positive baseline's (Hades 0.929 vs 0.980, Portal 2 0.927 vs 0.979). See the sarcasm limitation below.
 
 ### Aspect tagger
 
@@ -69,11 +75,12 @@ These are known failure modes, measured or observed and left unfixed, for the re
 - **Generic opinion sentences get tagged with an aspect.** "I love this game so much" → gameplay, "super worth it" → price, "the sequel has been a huge disappointment" → story. In the sample, 17 gold-`none` units got an aspect, which caps `none` precision near 0.51. The fix is explicit `none` anchors, a mechanism change deferred as a stretch goal.
 - **No graphics/audio/art aspect.** These count as `none` by design, and the eval tracks them in label notes.
 - **Sentiment is weak on overwhelmingly positive games.** See the Hades and Portal 2 numbers above. There are too few negatives in those games for the model to learn their complaints.
+- **The model occasionally misreads short, sarcastic or ironic positive reviews as negative.** In Portal 2's test set, 7 recommending reviews flipped from positive to negative when the model was retrained, among them "You need high IQ or a friend to play this game and i don't have both", "only play if ur brain is bigger than aperture science itself" and "They're going to send me back to my primitive tribe". This is a direct tradeoff of training on substantially more negative examples (7,255 vs. 878), which improved real complaint detection on every test set but makes the model somewhat more sensitive to negation and other function words (`not`, `don't`, `they`). That mechanism is inferred from the terms driving these reviews, not verified. It is most visible on near-unanimous games like Portal 2: there, both models catch the same 3 of 4 negative reviews, and every extra mistake is a recommending review read as negative, not a real complaint missed. The same pattern shows on games neither model trained on. On Portal (98.9% positive), the new model newly misreads 33 recommending reviews and newly gets 7 right, and its accuracy drops from 0.957 to 0.934. Reproduce with `scripts/portal_flips.py` and `scripts/unseen_check.py`.
 - **Results describe recent opinion only.** Each game is limited to its ~1000 most recent English reviews and is never refreshed. For a popular game that covers roughly 1-3 months, which also bounds the trend chart. The dashboard says so under the game name.
 - **An interrupted run needs a manual retry.** Processing runs inside the API process. If the process running it dies mid-run (out of memory, redeploy, shutdown, a Ctrl-C'd CLI run), that game is marked `failed` with the reason, at the next API startup or by the next request for it, and the dashboard shows the failed screen. A live run holds a Postgres advisory lock for its whole duration, and only games whose lock nobody holds are failed, so a `--force` run from a laptop or another instance's run is not failed under it. It is not retried on its own, so a run that crashed the host can't crash it again. To retry, run `python scripts/process_reviews.py --force APPID` from a local checkout, with `DATABASE_URL` pointing at the deployed database.
 - **With on-demand processing on, Render's free tier can't reliably finish a first analysis.** This is why the deployed demo turns it off (see below); it still applies to any host this slow that turns it on. At 0.1 CPU one game takes 14-19 min (see "Processing is not batched"), so every first visit reaches the dashboard's timeout screen, not only queued ones; "check again" shows the result once it is done. Runs are serialized within one process, because the memory figures below were measured for a single run, so a game requested during another run waits its turn. In the emulated test, two games requested together finished after 18.8 and 32.5 min; the second waited 18.8 min before its own 13.7 min run. Render also spins a free instance down after 15 minutes without inbound requests, and a background run does not count as one. Once the dashboard stops polling, a run still going about 20 minutes after the last request is killed, and the next startup marks it `failed`. A single game's run fits in that window; a queued one does not unless something keeps requesting. Batching across reviews (below) is the real fix and is not attempted yet; a longer poll only keeps the instance awake, and parallel runs would break the memory bound.
 - **Processing is not batched.** Each review gets its own predict and encode call. Batching across reviews would make the run several times faster. It takes 11-35 s per game on a 32-core desktop with the encoder capped at 8 threads, and 14-19 min in the production image limited to 0.1 CPU and 512 MB (`docker run --cpus=0.1 --memory=512m`), which emulates Render's free tier on the dev desktop; it has not been timed on Render itself. The two measured games took 18.8 min (9,326 units, including about 8 s of model loading) and 13.7 min (6,154 units), with the encoder on 1 thread.
-- **Memory headroom is about 20%.** Render's free tier allows 512 MB. Measured inside the production image with `scripts/check_memory.py`, processing the 1000 cached reviews of each of the 5 test games peaks at 354-411 MB, so the worst real game uses 80% of the limit. A synthetic worst case, where every encoder batch is 8 units at the full 256 tokens, peaks at 442 MB (86%). Every run also finished under a hard 512 MB container limit. An end-to-end run of the rebuilt image (container limited to 512 MB and 0.1 CPU, two games requested at once over HTTP and processed one after the other in the same API process) peaked at 400 MB by the container's cgroup `memory.peak`, the figure the memory limit enforces, with no OOM events; the process's own peak RSS was 427 MB, because it also counts shared file-backed pages. Loading the app and both models alone takes about 345 MB; the encoder (ONNX Runtime + MiniLM) is 180 MB of that. The first figures published here (358 MB, then 351 MB, about 70%) were wrong. They came from a synthetic review whose units were about 20 tokens, while real reviews contain units of up to 256 tokens, and encoder memory grows with batch size x sequence length. At the old batch size of 32, one real game peaked at 640 MB; the batch size is now 8. With torch + sentence-transformers the process was already at 564 MB on that same short synthetic text. ONNX gives the same scores as torch (max difference 5e-7 over 10,265 units, no label changes) at the same speed.
+- **Memory headroom is 13-19%.** Render's free tier allows 512 MB. Measured inside the production image with `scripts/check_memory.py`, processing the 1000 cached reviews of each of the 5 test games peaks at 354-411 MB, so the worst real game uses 80% of the limit. A synthetic worst case, where every encoder batch is 8 units at the full 256 tokens, peaks at 442 MB (86%). Every run also finished under a hard 512 MB container limit. Those figures are for the first sentiment model. The shipped model has a 96k-term vocabulary against 25k and takes about 17 MB more. Re-measured in the rebuilt production image (`--cpus=1 --memory=512m --memory-swap=512m`), with each model run in the same image, first model vs shipped one: the synthetic worst case went from 433 to 445 MB (87%), and the 5 games from 346-408 to 358-417 MB, so the worst real game uses 81% of the limit. All twelve runs finished under the hard 512 MB limit. An end-to-end run of the rebuilt image (container limited to 512 MB and 0.1 CPU, two games requested at once over HTTP and processed one after the other in the same API process) peaked at 400 MB by the container's cgroup `memory.peak`, the figure the memory limit enforces, with no OOM events; the process's own peak RSS was 427 MB, because it also counts shared file-backed pages. Loading the app and both models alone takes about 345 MB; the encoder (ONNX Runtime + MiniLM) is 180 MB of that. The first figures published here (358 MB, then 351 MB, about 70%) were wrong. They came from a synthetic review whose units were about 20 tokens, while real reviews contain units of up to 256 tokens, and encoder memory grows with batch size x sequence length. At the old batch size of 32, one real game peaked at 640 MB; the batch size is now 8. With torch + sentence-transformers the process was already at 564 MB on that same short synthetic text. ONNX gives the same scores as torch (max difference 5e-7 over 10,265 units, no label changes) at the same speed.
 
 ### Why the demo serves a fixed set of games
 
@@ -181,8 +188,10 @@ Settings live in the repo-root `.env`: `DATABASE_URL`, `DATABASE_URL_DIRECT` (op
 
 The sentiment model trains on cached reviews, and only the running API caches them. So a from-scratch setup, with the committed model deleted, goes in this order:
 
-1. **Ingest.** With the API running (no model needed yet), request a few games' reviews, e.g. `curl "localhost:8000/games/1145360/reviews?limit=1"`. Include games with mixed ratings so the model sees enough negative reviews. The shipped model used Portal 2, Hades, Starfield, Cities: Skylines II and PAYDAY 3 (appids 620, 1145360, 1716740, 949230, 1272080).
+1. **Ingest.** With the API running (no model needed yet), request a few games' reviews, e.g. `curl "localhost:8000/games/1145360/reviews?limit=1"`. Include games with mixed ratings so the model sees enough negative reviews. The first model used Portal 2, Hades, Starfield, Cities: Skylines II and PAYDAY 3 (appids 620, 1145360, 1716740, 949230, 1272080).
 2. **Train.** `python scripts/train_sentiment.py` writes `models_store/sentiment.joblib` and `docs/eval/sentiment_report.txt`.
+
+The shipped model was not trained this way. It came from `scripts/compare_sentiment.py --adopt`, run on a local training database holding those 5 games plus 28 more, ingested with `scripts/ingest_game.py` and `DATABASE_URL` pointing at that database. Steam only serves recent reviews, so that corpus can't be re-fetched as it was. The script's docstring has the details, and `docs/DECISIONS.md` (2026-10-13) lists the games.
 3. **Serve.** `/aspects` and filtered `/reviews` now work. Until a model exists they answer 503. The API loads the model on first use, so no restart is needed for the first one. After a *re*train, restart the API and run `python scripts/process_reviews.py --force` to redo stored results.
 
 After changing anchors or the threshold, rerun `python scripts/evaluate_aspects.py` (writes `docs/eval/aspect_report.txt`) and `python scripts/process_reviews.py --force`.
@@ -223,26 +232,33 @@ npm test && npm run lint && npm run typecheck
 
 - **Database: Neon.** Create a project. Neon shows a pooled and a direct connection string. Convert each to the asyncpg form: add `+asyncpg` to the scheme and replace `?sslmode=require&channel_binding=require` with `?ssl=require`, because asyncpg rejects `sslmode` and `channel_binding`:
   `postgresql+asyncpg://USER:PASSWORD@HOST/DB?ssl=require`
-- **Demo games: load them into Neon before the first deploy.** The deployed API doesn't analyze new games (see above), so copy the five analyzed games from the local database. First make sure every local game is `done` (`python scripts/process_reviews.py` skips the ones that are). Then, from the repo root, with the local `db` container running:
+- **Demo games: load them into Neon before the first deploy.** The deployed API doesn't analyze new games (see above), so copy the five analyzed games from the local database. Only those five: the local database may hold other games you analyzed, and they would show up on the demo. First make sure the five are `done` and processed with the current models (`python scripts/process_reviews.py --force 620 949230 1145360 1272080 1716740`). Then, from the repo root, with the local `db` container running:
   ```bash
   # Create the tables on Neon (the Render container would do this on start; the copy needs them first).
   (cd backend && source .venv/bin/activate && \
     DATABASE_URL='<pooled, asyncpg form>' DATABASE_URL_DIRECT='<direct, asyncpg form>' alembic upgrade head)
-  # Copy games, reviews and aspect units in one transaction. psql takes the direct string as Neon shows it.
-  # Keep --data-only: without it the dump writes review_aspects before reviews, and on Neon the FK
-  # already exists, so that table fails to load. pipefail makes a pg_dump failure visible.
+  # Copy the five games' rows of games, reviews and aspect units, parents first so the FKs hold,
+  # plus the aspect-unit id sequence, in one transaction. psql takes the direct string as Neon
+  # shows it. pipefail makes a failed export visible.
   set -o pipefail
-  docker compose exec -T db pg_dump -U steam -d steam_reviews --data-only \
-      -t games -t reviews -t review_aspects -t review_aspects_id_seq \
-    | docker compose exec -T db psql -v ON_ERROR_STOP=1 --single-transaction '<direct string>'
+  DEMO="620, 949230, 1145360, 1272080, 1716740"
+  src() { docker compose exec -T db psql -U steam -d steam_reviews -v ON_ERROR_STOP=1 -At "$@"; }
+  {
+    echo "COPY games FROM STDIN;";          src -c "COPY (SELECT * FROM games WHERE appid IN ($DEMO)) TO STDOUT"; echo '\.'
+    echo "COPY reviews FROM STDIN;";        src -c "COPY (SELECT * FROM reviews WHERE appid IN ($DEMO)) TO STDOUT"; echo '\.'
+    echo "COPY review_aspects FROM STDIN;"; src -c "COPY (SELECT a.* FROM review_aspects a JOIN reviews r ON r.id = a.review_id WHERE r.appid IN ($DEMO)) TO STDOUT"; echo '\.'
+    src -c "SELECT format('SELECT setval(%L, %s);', 'review_aspects_id_seq', last_value) FROM review_aspects_id_seq"
+  } | docker compose exec -T db psql -v ON_ERROR_STOP=1 --single-transaction '<direct string>'
   # Check: five rows, all done.
   docker compose exec -T db psql '<direct string>' -c "SELECT appid, name, aspects_status FROM games ORDER BY appid"
-  # Check: row counts and the id sequence match the local database (run it against both).
+  # Check: row counts and the id sequence on Neon...
   docker compose exec -T db psql '<direct string>' -At -c \
     "SELECT 'games', count(*) FROM games UNION ALL SELECT 'reviews', count(*) FROM reviews UNION ALL SELECT 'review_aspects', count(*) FROM review_aspects UNION ALL SELECT 'seq', last_value FROM review_aspects_id_seq"
+  # ...match the five games in the local database.
+  src -c "SELECT 'games', count(*) FROM games WHERE appid IN ($DEMO) UNION ALL SELECT 'reviews', count(*) FROM reviews WHERE appid IN ($DEMO) UNION ALL SELECT 'review_aspects', count(*) FROM review_aspects a JOIN reviews r ON r.id = a.review_id WHERE r.appid IN ($DEMO) UNION ALL SELECT 'seq', last_value FROM review_aspects_id_seq"
   ```
-  The Neon tables must be empty before the copy. The load rolls back on the first duplicate key, so after a failed or partial attempt clear them with `TRUNCATE games, reviews, review_aspects RESTART IDENTITY CASCADE` (check which database you are connected to first) and run it again.
-  This was rehearsed against a fresh local database: five games `done`, 1000 reviews each with sentiment, and the aspect-unit id sequence carried over.
+  The Neon tables must be empty before the copy. The load rolls back on the first duplicate key, so after a failed or partial attempt, or to replace the demo data (for example after a retrained model), clear them with `TRUNCATE games, reviews, review_aspects RESTART IDENTITY CASCADE` (check which database you are connected to first) and run it again.
+  Rehearsed against a fresh local database, from a local database holding nine games: five games `done` with their card counts, 5000 reviews, 26,048 aspect units and the id sequence carried over. A second run failed on the first duplicate key and left the data unchanged.
 - **API: Render.** New → Blueprint, then select this repo. `render.yaml` defines a Docker web service from `backend/`. Enter `DATABASE_URL` (the pooled string) and `DATABASE_URL_DIRECT` (the direct string) when prompted. `ALLOW_ON_DEMAND_PROCESSING=false` comes from `render.yaml`. The container runs `alembic upgrade head` against the direct endpoint on start. The embedding model is baked into the image, and the sentiment model ships in the repo. The app disables asyncpg's prepared-statement cache, so it works through Neon's PgBouncer pooler.
 - **Dashboard: Vercel.** Import the repo with root directory `frontend`, and set `API_URL` to the Render service URL *before* the first build, because Next.js bakes the `/api` rewrite into the build. `frontend/Dockerfile` is available for hosting it elsewhere (`--build-arg API_URL=...`).
 

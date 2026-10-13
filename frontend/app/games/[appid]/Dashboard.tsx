@@ -380,14 +380,16 @@ function Headline({
             </li>
           )}
           {/* Hand-copied from the eval reports; update them after retraining or retuning.
-              Sentiment: negative precision 0.643 / recall 0.813 (docs/eval/sentiment_report.txt),
-              not accuracy, which a model answering "positive" every time already gets to 78%.
+              Sentiment: negative precision 0.731 / recall 0.836 on the 33-game test set
+              (docs/eval/sentiment_report.txt, section 4a), not accuracy, which a model answering
+              "positive" every time already gets to 72%.
               Tagging: accuracy 0.621 vs baseline 0.329 (docs/eval/aspect_report.txt). */}
           <li>
             The sentiment model reads {pct(data.overall.positive_pct) ?? 0}% of these reviews as
-            positive. Tested on 1,000 reviews it had not seen, when it called a review negative it
-            was right about 2 times in 3, and it caught about 4 in 5 of the negative reviews. It is
-            weakest on games nearly everyone likes, where negative reviews are rare.
+            positive. Tested on 6,538 reviews from 33 games that it had not seen, when it called a
+            review negative it was right about 3 times in 4, and it caught about 5 in 6 of the
+            negative reviews. It is weakest on games nearly everyone likes, where negative reviews
+            are rare, and it sometimes reads short joking praise as a complaint.
           </li>
           <li>
             Each review is split into sentences, and each sentence is matched to the topic whose
